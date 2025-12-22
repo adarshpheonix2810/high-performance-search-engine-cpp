@@ -1,12 +1,25 @@
 #include "./header/searchengine.hpp"
 using namespace std;
-//argument count(argc) and argument vector(argv)
-int main (int argc, char** argv) {//argv and argc are how command line arguments are passed to main() in C and C++.
-    if(argc !=5){
-        cout<<"Wrong number of arguments"<<endl;
+
+int main(int argc, char** argv) {
+    // read document/books/searchengine.md for more information
+    if (argc != 5 ||
+        strcmp(argv[1], "-d") != 0 ||
+        strcmp(argv[3], "-k") != 0) {
+        cout << "Wrong arguments. Usage: -d <file> -k <number>" << endl;
+        return -1;
     }
-    else{
-        cout<<"Starting search engine with parameters:"<<endl;
+
+    cout << "Please wait..." << endl;
+    int linecounter = 0;
+    int maxlength = -1;
+    int k;
+    try {
+        k = stoi(argv[4]);
+    } catch (...) {
+        cout << "Invalid value for -k (must be an integer)" << endl;
+        return -1;
     }
-    return 0;
+    
+    
 }
