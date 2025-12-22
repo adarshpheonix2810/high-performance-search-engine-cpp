@@ -1,0 +1,10 @@
+Introduction to Search Engines
+
+A search engine is a software system that helps users find information on the internet. 
+It crawls web pages, stores them as documents and builds an index over the text.
+
+When a user types a query, the search engine computes a relevance score for each document 
+using ranking algorithms like TF-IDF or BM25. The most relevant documents are returned as results.
+
+Modern search engines focus on speed, scalability and high performance. They use caching, 
+inverted indexes, parallel processing and distributed systems to handle millions of queries per second.

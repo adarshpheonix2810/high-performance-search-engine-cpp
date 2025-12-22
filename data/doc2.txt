@@ -1,0 +1,12 @@
+Basics of Machine Learning
+
+Machine learning is a field of artificial intelligence that focuses on building systems 
+that learn from data instead of being explicitly programmed. A machine learning model is trained 
+on a dataset and then used to make predictions or decisions.
+
+Search engines also use machine learning techniques. For example, they can learn which documents 
+are more relevant to a query based on user clicks, query logs and historical data.
+
+Common algorithms in machine learning include linear regression, decision trees, neural networks 
+and clustering methods. Performance, generalization and scalability are important concepts 
+in modern machine learning systems.
