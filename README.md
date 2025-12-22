@@ -44,3 +44,4 @@ The goal of this project is to understand **how real search engines work interna
 - LRU cache for repeated queries
 
 ---
+g++ -c searchengine.cpp; g++ -o searchengine.exe searchengine.o

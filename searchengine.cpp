@@ -20,6 +20,11 @@ int main(int argc, char** argv) {
         cout << "Invalid value for -k (must be an integer)" << endl;
         return -1;
     }
-    
+    FILE *file=fopen(argv[2], "r");
+    if(file==NULL){
+        cout<<"Cannot open file: "<<argv[2]<<endl;
+        return -1;
+    }
+    fclose(file);
     
 }
