@@ -36,6 +36,7 @@
 *.exe
 *.out
 *.app
+searchengine
 
 # debug information files
 *.dwo

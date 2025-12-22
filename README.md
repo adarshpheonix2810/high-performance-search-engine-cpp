@@ -44,4 +44,35 @@ The goal of this project is to understand **how real search engines work interna
 - LRU cache for repeated queries
 
 ---
-g++ -c searchengine.cpp; g++ -o searchengine.exe searchengine.o
+
+## 🛠️ Building
+
+This project uses a cross-platform Makefile that works on both Linux/Unix and Windows.
+
+### Using Make (Recommended)
+
+```bash
+# Build the project
+make
+
+# Clean build artifacts
+make clean
+```
+
+### Manual Build
+
+If you prefer to build manually:
+
+**On Linux/Unix:**
+```bash
+g++ -c searchengine.cpp
+g++ -o searchengine searchengine.o
+```
+
+**On Windows:**
+```bash
+g++ -c searchengine.cpp
+g++ -o searchengine.exe searchengine.o
+```
+
+---
