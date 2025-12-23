@@ -44,4 +44,14 @@ The goal of this project is to understand **how real search engines work interna
 - LRU cache for repeated queries
 
 ---
-g++ -c searchengine.cpp; g++ -o searchengine.exe searchengine.o
+cmake --build .
+.\searchengine.exe -d ..\data.txt -k 5
+
+
+cd "C:\Users\adars\OneDrive\Desktop\Search Engine"
+Remove-Item -Recurse -Force build
+mkdir build
+cd build
+cmake -G "MinGW Makefiles" ..
+cmake --build .
+.\searchengine.exe -d ..\data.txt -k 5
