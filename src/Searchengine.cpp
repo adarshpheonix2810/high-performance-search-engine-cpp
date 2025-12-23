@@ -20,15 +20,11 @@ int main(int argc, char** argv) {
         cout << "Invalid value for -k (must be an integer)" << endl;
         return -1;
     }
-    read_file(&linecounter, &maxlength,argv[2]);
-
-    /*
-    FILE *file=fopen(argv[2], "r");
-    if(file==NULL){
-        cout<<"Cannot open file: "<<argv[2]<<endl;
+    
+    if(read_file(&linecounter, &maxlength,argv[2]) == -1){
         return -1;
     }
-    fclose(file);
-    */
+    cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
+    return 1;
     
 }
