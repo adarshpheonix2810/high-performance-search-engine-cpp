@@ -15,6 +15,19 @@ public:
     Mymap(int size, int buffersize);
     ~Mymap();
     int insert(char* line,int i);
+    void setlength(int length, int id){
+        doc_lengths[id]=length;
+    }
+    int getlength(int id ){
+        return doc_lengths[id];
+    }
+    void print(int i){
+        cout << "Document " << i << ": " << documents[i] << endl;
+    }
+    char* getDocument(int i){
+        return documents[i];
+    }
+    
     const int get_size() const { return size;  }
     const int get_buffersize() const { return buffersize; }
 };
