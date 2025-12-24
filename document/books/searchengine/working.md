@@ -8,7 +8,7 @@ This document provides a **detailed step-by-step explanation** of the `Searcheng
 
 **File Name**: `Searchengine.cpp`  
 **Location**: `src/Searchengine.cpp`  
-**Purpose**: Main entry point for the search engine - handles command-line arguments, validates input, and processes document files  
+**Purpose**: Main entry point for the search engine - handles command-line arguments, validates input, processes document files, and manages the document storage container  
 **Header File**: `header/Searchengine.hpp`
 
 ---
@@ -21,9 +21,14 @@ This document provides a **detailed step-by-step explanation** of the `Searcheng
 4. [Command-Line Argument Parsing](#command-line-argument-parsing)
 5. [Argument Validation](#argument-validation)
 6. [Integer Conversion with Error Handling](#integer-conversion-with-error-handling)
-7. [File Processing](#file-processing)
-8. [Execution Flow Diagram](#execution-flow-diagram)
-9. [Example Usage Scenarios](#example-usage-scenarios)
+7. [File Size Analysis](#file-size-analysis)
+8. [Mymap Object Creation](#mymap-object-creation)
+9. [Reading Documents into Memory](#reading-documents-into-memory)
+10. [Success Output and Data Display](#success-output-and-data-display)
+11. [Document Printing Loop](#document-printing-loop)
+12. [Memory Cleanup](#memory-cleanup)
+13. [Execution Flow Diagram](#execution-flow-diagram)
+14. [Example Usage Scenarios](#example-usage-scenarios)
 
 ---
 
@@ -57,8 +62,19 @@ int main(int argc, char** argv) {
     if(read_sizes(&linecounter, &maxlength, argv[2]) == -1){
         return -1;
     }
-    cout << "File read successfully. Lines: " << linecounter 
-         << ", Max Length: " << maxlength << endl;
+
+    Mymap *mymap=new Mymap(linecounter, maxlength);
+
+    if(read_input(mymap, argv[2]) == -1){
+        delete (mymap);
+        return -1;
+    }
+
+    cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
+    for(int i=0;i<mymap->get_size();i++){
+        mymap->print(i);
+    }
+    delete (mymap);
     return 1;
 }
 ```
@@ -956,7 +972,743 @@ cout << "File read successfully. Lines: "  // Static text
 
 ---
 
-### Line 29: Success Return
+---
+
+## Mymap Object Creation
+
+### Line 27: Dynamic Memory Allocation for Document Container
+
+```cpp
+Mymap *mymap=new Mymap(linecounter, maxlength);
+```
+
+**This line creates the main data structure that will store all documents!**
+
+---
+
+### Breaking It Down
+
+#### Part 1: Variable Declaration
+
+```cpp
+Mymap *mymap
+```
+
+**What it means:**
+- `Mymap` - Class type (defined in Map.cpp)
+- `*` - Pointer (stores memory address)
+- `mymap` - Variable name
+
+**Visual:**
+
+```
+Stack:
+  mymap (Mymap*) = [will point to heap object]
+```
+
+---
+
+#### Part 2: Dynamic Allocation
+
+```cpp
+new Mymap(linecounter, maxlength)
+```
+
+**What `new` does:**
+1. Allocates memory on heap for `Mymap` object
+2. Calls `Mymap` constructor with parameters
+3. Returns pointer to allocated object
+
+**Parameters passed to constructor:**
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `linecounter` | 150 (example) | Number of documents to store |
+| `maxlength` | 85 (example) | Maximum length of any document |
+
+---
+
+#### Part 3: Memory Layout
+
+**After line 27 executes:**
+
+```
+Stack:
+  linecounter = 150
+  maxlength = 85
+  mymap (Mymap*) → [heap address]
+
+Heap:
+  Mymap object:
+    - size = 150
+    - max_length = 85
+    - documents** → [array of 150 char* pointers]
+```
+
+---
+
+### Why Use new?
+
+**Heap allocation is necessary because:**
+1. **Size determined at runtime** - Don't know `linecounter` until file is read
+2. **Large data** - Could be thousands of documents
+3. **Persistent until deleted** - Stays alive until we explicitly free it
+
+---
+
+### Constructor Execution
+
+**When `new Mymap(linecounter, maxlength)` is called:**
+
+```cpp
+// Inside Map.cpp constructor
+Mymap::Mymap(int size, int max_length) : size(size), max_length(max_length) {
+    documents = new char*[size];  // Allocate array of pointers
+    for(int i=0; i<size; i++){
+        documents[i] = nullptr;    // Initialize to null
+    }
+}
+```
+
+**Step by step:**
+
+```
+1. Allocate Mymap object
+2. Initialize size = 150
+3. Initialize max_length = 85
+4. Allocate array of 150 char* pointers
+5. Set all pointers to nullptr
+6. Return address of object
+7. Store address in mymap variable
+```
+
+---
+
+### Example with Different Sizes
+
+**Small file (3 lines, max 20 chars):**
+
+```cpp
+linecounter = 3
+maxlength = 20
+Mymap *mymap = new Mymap(3, 20);
+
+Heap:
+  documents → [ptr0][ptr1][ptr2]  (3 pointers)
+```
+
+**Large file (1000 lines, max 500 chars):**
+
+```cpp
+linecounter = 1000
+maxlength = 500
+Mymap *mymap = new Mymap(1000, 500);
+
+Heap:
+  documents → [ptr0][ptr1][ptr2]...[ptr999]  (1000 pointers)
+```
+
+---
+
+## Reading Documents into Memory
+
+### Lines 29-32: read_input() Function Call with Error Handling
+
+```cpp
+if(read_input(mymap, argv[2]) == -1){
+    delete (mymap);
+    return -1;
+}
+```
+
+**This is where actual document content is loaded into memory!**
+
+---
+
+### Line 29: Function Call and Error Check
+
+```cpp
+if(read_input(mymap, argv[2]) == -1)
+```
+
+**Breaking it down:**
+
+#### Function Call
+
+```cpp
+read_input(mymap, argv[2])
+```
+
+**Function: `read_input()`**
+- Defined in `document_store.cpp`
+- Reads all lines from file
+- Stores each line as a document in mymap
+
+**Parameters:**
+
+| Argument | Type | Value | Purpose |
+|----------|------|-------|---------|
+| `mymap` | `Mymap*` | Pointer to container | Where to store documents |
+| `argv[2]` | `char*` | File path | Which file to read |
+
+**What it does inside:**
+
+```
+1. Opens file
+2. For each line in file:
+   - Allocate memory for line
+   - Copy line content
+   - Store in mymap using insert()
+3. Close file
+4. Return success/error code
+```
+
+---
+
+#### Return Value Check
+
+```cpp
+... == -1
+```
+
+**Possible return values:**
+
+```
+Return -1 → Error
+    - File couldn't be opened again
+    - Memory allocation failed
+    - Read error occurred
+
+Return 1 → Success
+    - All documents loaded
+    - mymap now contains all data
+```
+
+---
+
+### Lines 30-31: Cleanup on Error
+
+```cpp
+delete (mymap);
+return -1;
+```
+
+**Why cleanup is crucial:**
+
+**Without cleanup:**
+
+```cpp
+if(read_input(mymap, argv[2]) == -1){
+    return -1;  // ❌ Memory leak! mymap still allocated!
+}
+```
+
+**With cleanup:**
+
+```cpp
+if(read_input(mymap, argv[2]) == -1){
+    delete (mymap);  // ✅ Free memory first
+    return -1;       // Then exit
+}
+```
+
+---
+
+### What delete (mymap) Does
+
+**Line 30: `delete (mymap);`**
+
+```
+1. Calls Mymap destructor
+2. Destructor frees documents array
+3. Destructor frees each individual document
+4. Frees the Mymap object itself
+```
+
+**Visual:**
+
+```
+Before delete:
+  Heap:
+    mymap object → documents[0] → "doc content"
+                   documents[1] → nullptr
+                   ...
+
+After delete:
+  Heap:
+    [all memory freed]
+  
+  Stack:
+    mymap still exists but points to freed memory
+```
+
+---
+
+### Execution Flow Example
+
+**Success scenario:**
+
+```
+Command: ./searchengine -d doc1.txt -k 10
+
+Line 29: read_input(mymap, "doc1.txt")
+    ↓
+Inside read_input():
+    Opens doc1.txt successfully
+    Reads line 1: "First document"
+    mymap->insert("First document", 0)
+    Reads line 2: "Second document"
+    mymap->insert("Second document", 1)
+    ...
+    Reads line 150: "Last document"
+    mymap->insert("Last document", 149)
+    Returns 1
+    ↓
+Line 29: return value == 1 → 1 == -1 → FALSE
+    ↓
+Skip lines 30-31
+    ↓
+Continue to line 34
+```
+
+**Error scenario:**
+
+```
+Command: ./searchengine -d locked.txt -k 10
+
+Line 29: read_input(mymap, "locked.txt")
+    ↓
+Inside read_input():
+    fopen() fails (permission denied)
+    Prints: "Error opening file: locked.txt"
+    Returns -1
+    ↓
+Line 29: return value == -1 → -1 == -1 → TRUE
+    ↓
+Line 30: delete (mymap)
+    ↓
+Mymap destructor runs:
+    Frees documents array
+    Frees Mymap object
+    ↓
+Line 31: return -1
+    ↓
+Program exits
+```
+
+---
+
+### Memory State After Successful read_input()
+
+```
+Stack:
+  linecounter = 150
+  maxlength = 85
+  mymap → [heap address]
+
+Heap:
+  Mymap object:
+    size = 150
+    max_length = 85
+    documents → [0] → "First document\0"
+                [1] → "Second document\0"
+                [2] → "Third document\0"
+                ...
+                [149] → "Last document\0"
+```
+
+---
+
+## Success Output and Data Display
+
+### Line 34: Success Message
+
+```cpp
+cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
+```
+
+**This confirms everything loaded successfully!**
+
+---
+
+### Breaking Down the Output
+
+```cpp
+cout << "File read successfully. Lines: "  // Static text
+     << linecounter                         // Variable value
+     << ", Max Length: "                    // Static text
+     << maxlength                           // Variable value
+     << endl;                               // Newline
+```
+
+---
+
+### Example Outputs
+
+**Small file:**
+```
+File read successfully. Lines: 3, Max Length: 25
+```
+
+**Medium file:**
+```
+File read successfully. Lines: 150, Max Length: 85
+```
+
+**Large file:**
+```
+File read successfully. Lines: 10000, Max Length: 512
+```
+
+---
+
+### Why This Output is Important
+
+**User information:**
+- Confirms successful processing
+- Shows file statistics
+- Provides verification
+
+**Debugging:**
+- Can verify line count is correct
+- Can check max length is reasonable
+- Helps identify issues
+
+---
+
+## Document Printing Loop
+
+### Lines 35-37: Print All Documents
+
+```cpp
+for(int i=0;i<mymap->get_size();i++){
+    mymap->print(i);
+}
+```
+
+**This loops through all documents and displays them!**
+
+---
+
+### Line 35: Loop Declaration
+
+```cpp
+for(int i=0; i<mymap->get_size(); i++)
+```
+
+**Breaking it down:**
+
+#### Part 1: Initialization
+
+```cpp
+int i=0
+```
+
+**Creates loop counter:**
+- Starts at 0 (first document index)
+- Used to access each document
+
+---
+
+#### Part 2: Condition
+
+```cpp
+i<mymap->get_size()
+```
+
+**What `get_size()` returns:**
+- Number of documents in mymap
+- Same as `linecounter`
+
+**How condition works:**
+
+```
+If mymap has 150 documents:
+  i=0: 0 < 150 → TRUE → continue
+  i=1: 1 < 150 → TRUE → continue
+  ...
+  i=149: 149 < 150 → TRUE → continue
+  i=150: 150 < 150 → FALSE → stop
+```
+
+---
+
+#### Part 3: Increment
+
+```cpp
+i++
+```
+
+**After each iteration:**
+- Increments i by 1
+- Moves to next document
+
+---
+
+### Line 36: Print Function Call
+
+```cpp
+mymap->print(i);
+```
+
+**What it does:**
+
+```cpp
+// Inside Map.cpp
+void Mymap::print(int index) const {
+    if(index >= 0 && index < size && documents[index] != nullptr){
+        cout << documents[index] << endl;
+    }
+}
+```
+
+**Process:**
+1. Check if index is valid
+2. Check if document exists
+3. Print document content
+4. Add newline
+
+---
+
+### Complete Loop Execution Example
+
+**File contents:**
+```
+Hello World
+C++ Programming
+Search Engine
+```
+
+**Execution:**
+
+```
+Line 35: i=0
+    ↓
+Line 36: mymap->print(0)
+    ↓
+Output: "Hello World"
+    ↓
+Line 35: i++ → i=1
+    ↓
+Line 35: i=1, 1 < 3 → TRUE
+    ↓
+Line 36: mymap->print(1)
+    ↓
+Output: "C++ Programming"
+    ↓
+Line 35: i++ → i=2
+    ↓
+Line 35: i=2, 2 < 3 → TRUE
+    ↓
+Line 36: mymap->print(2)
+    ↓
+Output: "Search Engine"
+    ↓
+Line 35: i++ → i=3
+    ↓
+Line 35: i=3, 3 < 3 → FALSE
+    ↓
+Exit loop
+```
+
+**Complete output:**
+```
+Hello World
+C++ Programming
+Search Engine
+```
+
+---
+
+### Visual Flow
+
+```
+mymap contains:
+  [0] → "Hello World"
+  [1] → "C++ Programming"  
+  [2] → "Search Engine"
+
+Loop iterations:
+  i=0 → print("Hello World")
+  i=1 → print("C++ Programming")
+  i=2 → print("Search Engine")
+  i=3 → condition false, exit
+
+Output:
+  Hello World
+  C++ Programming
+  Search Engine
+```
+
+---
+
+## Memory Cleanup
+
+### Line 38: Freeing Dynamic Memory
+
+```cpp
+delete (mymap);
+```
+
+**This is CRITICAL for preventing memory leaks!**
+
+---
+
+### Why We Need delete
+
+**Problem without delete:**
+
+```cpp
+int main() {
+    Mymap *mymap = new Mymap(150, 85);
+    // ... use mymap ...
+    return 1;  // ❌ Memory leak! mymap never freed!
+}
+```
+
+**When program ends:**
+- Stack memory automatically freed
+- **Heap memory stays allocated** ❌
+- Operating system eventually reclaims it
+- But it's a memory leak!
+
+**Solution with delete:**
+
+```cpp
+int main() {
+    Mymap *mymap = new Mymap(150, 85);
+    // ... use mymap ...
+    delete (mymap);  // ✅ Properly freed!
+    return 1;
+}
+```
+
+---
+
+### What delete Does
+
+**Step-by-step execution:**
+
+```
+1. Call Mymap destructor
+2. Destructor executes:
+   - Loop through all documents
+   - delete[] each document string
+   - delete[] documents array
+3. Free Mymap object itself
+```
+
+---
+
+### Destructor Code
+
+```cpp
+// Inside Map.cpp
+Mymap::~Mymap(){
+    for(int i=0; i<size; i++){
+        if(documents[i] != nullptr){
+            delete[] documents[i];  // Free each document
+        }
+    }
+    delete[] documents;  // Free array of pointers
+}
+```
+
+---
+
+### Memory State Before and After
+
+**Before delete (line 38):**
+
+```
+Stack:
+  mymap → [heap address]
+
+Heap:
+  Mymap object:
+    documents → [0] → "First document"
+                [1] → "Second document"
+                ...
+                [149] → "Last document"
+  
+  Total memory used: ~100KB (example)
+```
+
+**After delete:**
+
+```
+Stack:
+  mymap (dangling pointer - don't use!)
+
+Heap:
+  [all memory freed]
+  
+  Total memory used: 0 bytes
+```
+
+---
+
+### Matching new and delete
+
+**CRITICAL RULE: Every `new` must have a matching `delete`**
+
+```cpp
+// ✅ CORRECT
+Mymap *mymap = new Mymap(150, 85);
+delete (mymap);
+
+// ❌ WRONG - Memory leak
+Mymap *mymap = new Mymap(150, 85);
+// No delete!
+
+// ❌ WRONG - Double free (crash!)
+Mymap *mymap = new Mymap(150, 85);
+delete (mymap);
+delete (mymap);  // Already freed!
+```
+
+---
+
+### Why Use Parentheses?
+
+```cpp
+delete (mymap);   // With parentheses
+delete mymap;     // Without parentheses
+```
+
+**Both are valid!**
+- Parentheses are optional for `delete`
+- Some prefer them for clarity
+- Consistent with function call syntax
+
+---
+
+### Complete Memory Lifecycle
+
+```
+Line 27: Mymap *mymap = new Mymap(150, 85);
+    ↓
+  Heap: Mymap allocated, documents array allocated
+    ↓
+Lines 29-37: Use mymap
+    ↓
+  Heap: Document strings allocated and stored
+    ↓
+Line 38: delete (mymap);
+    ↓
+  Heap: All documents freed
+  Heap: documents array freed
+  Heap: Mymap object freed
+    ↓
+Line 39: return 1;
+    ↓
+  Stack: All local variables cleaned up
+  Program exits cleanly
+```
+
+---
+
+### Line 39: Program Exit
 
 ```cpp
 return 1;
@@ -965,26 +1717,13 @@ return 1;
 **What it does:**
 - Exits `main()` function
 - Returns success code `1` to operating system
-- Program terminates normally
+- Program terminates successfully
 
-**Why `1` instead of `0`?**
-
-**Convention varies:**
-```cpp
-// Standard C/C++ convention:
-return 0;   // Success
-return 1;   // Error
-
-// This program's convention:
-return 1;   // Success
-return -1;  // Error
-```
-
-**Our program uses:**
-- `1` for success (positive result)
-- `-1` for error (negative result)
-
-**Both are valid!** What matters is consistency within the program.
+**At this point:**
+- All documents have been printed
+- All memory has been freed
+- No memory leaks
+- Clean exit
 
 ---
 
@@ -1025,9 +1764,22 @@ START
   ├─ YES → return -1 → END
   └─ NO → Continue
   ↓
-[11] Print success message with statistics
+[11] Create: Mymap *mymap = new Mymap(linecounter, maxlength)
   ↓
-[12] return 1
+[12] Call: read_input(mymap, argv[2])
+  ↓
+[13] Return value == -1?
+  ├─ YES → delete (mymap) → return -1 → END
+  └─ NO → Continue
+  ↓
+[14] Print success message with statistics
+  ↓
+[15] For i=0 to mymap->get_size()-1:
+      mymap->print(i)
+  ↓
+[16] delete (mymap)
+  ↓
+[17] return 1
   ↓
 END
 ```
@@ -1118,28 +1870,640 @@ Final Output:
 
 ## Example Usage Scenarios
 
-### Scenario 1: Correct Usage ✓
+### Scenario 1: Correct Usage with Full Execution ✓
+
+**File: doc1.txt**
+```
+Line 1: Hello World
+Line 2: C++ Programming
+Line 3: Search Engine
+```
 
 **Command:**
 ```bash
-./searchengine -d documents/report.txt -k 5
+./searchengine -d doc1.txt -k 5
+```
+
+**Complete Execution:**
+```
+Arguments validated ✓
+    argc = 5
+    argv[1] = "-d"
+    argv[2] = "doc1.txt"
+    argv[3] = "-k"
+    argv[4] = "5"
+
+Output: Please wait...
+
+read_sizes() called:
+    linecounter = 3
+    maxlength = 18
+    Returns 1
+
+Mymap created:
+    mymap = new Mymap(3, 18)
+    Memory allocated for 3 documents
+
+read_input() called:
+    Opens doc1.txt
+    Reads line 0: "Hello World"
+    Reads line 1: "C++ Programming"
+    Reads line 2: "Search Engine"
+    Returns 1
+
+Output: File read successfully. Lines: 3, Max Length: 18
+
+Printing all documents:
+    Hello World
+    C++ Programming
+    Search Engine
+
+Memory cleanup:
+    delete (mymap) - all memory freed
+
+Exit code: 1 (success)
+```
+
+---
+
+### Scenario 2: Wrong Number of Arguments ✗
+
+**Command:**
+```bash
+./searchengine -d myfile.txt
+```
+
+**Execution:**
+```
+argc = 3
+Check: argc != 5
+    3 != 5 → TRUE
+    
+Output:
+    Wrong arguments. Usage: -d <file> -k <number>
+
+Exit code: -1 (error)
+```
+
+---
+
+### Scenario 3: Wrong Flag Order ✗
+
+**Command:**
+```bash
+./searchengine -k 10 -d myfile.txt
+```
+
+**Execution:**
+```
+argc = 5 ✓
+Check: argv[1] == "-d"
+    argv[1] = "-k"
+    strcmp("-k", "-d") ≠ 0 → TRUE
+    
+Output:
+    Wrong arguments. Usage: -d <file> -k <number>
+
+Exit code: -1 (error)
+```
+
+---
+
+### Scenario 4: Invalid Number ✗
+
+**Command:**
+```bash
+./searchengine -d myfile.txt -k abc
 ```
 
 **Execution:**
 ```
 Arguments validated ✓
-    argc = 5
-    argv[1] = "-d"
-    argv[2] = "documents/report.txt"
-    argv[3] = "-k"
-    argv[4] = "5"
 
-Output:
-    Please wait...
-    File read successfully. Lines: 234, Max Length: 156
+Output: Please wait...
+
+TRY: k = stoi("abc")
+    Exception thrown!
+
+CATCH:
+    Output: Invalid value for -k (must be an integer)
+
+Exit code: -1 (error)
+```
+
+---
+
+### Scenario 5: File Not Found ✗
+
+**Command:**
+```bash
+./searchengine -d missing.txt -k 10
+```
+
+**Execution:**
+```
+Arguments validated ✓
+Number parsed ✓ (k = 10)
+
+Output: Please wait...
+
+read_sizes() called:
+    fopen("missing.txt") returns NULL
+    Output: Cannot open file: missing.txt
+    Returns -1
+
+Back in main():
+    Return value == -1 → TRUE
+    return -1
+
+Exit code: -1 (error)
+
+Note: Mymap was never created (failed before line 27)
+```
+
+---
+
+### Scenario 6: File Error During read_input ✗
+
+**Command:**
+```bash
+./searchengine -d corrupted.txt -k 10
+```
+
+**Execution:**
+```
+Arguments validated ✓
+Number parsed ✓
+
+Output: Please wait...
+
+read_sizes() successful:
+    linecounter = 100
+    maxlength = 50
+    Returns 1
+
+Mymap created:
+    mymap = new Mymap(100, 50)
+
+read_input() called:
+    File cannot be opened (permission error)
+    Output: Error opening file: corrupted.txt
+    Returns -1
+
+Error handling:
+    delete (mymap) - memory freed
+    return -1
+
+Exit code: -1 (error)
+
+Note: Proper cleanup performed before exit!
+```
+
+---
+
+### Scenario 7: Large File Success ✓
+
+**Command:**
+```bash
+./searchengine -d bigfile.txt -k 1000
+```
+
+**Execution:**
+```
+Arguments validated ✓
+k = stoi("1000") = 1000 ✓
+
+Output: Please wait...
+
+read_sizes() processes file:
+    linecounter = 50000
+    maxlength = 2048
+    Returns 1
+
+Mymap created:
+    mymap = new Mymap(50000, 2048)
+    Memory allocated for 50000 documents
+
+read_input() loads all documents:
+    Processes 50000 lines
+    Returns 1
+
+Output: File read successfully. Lines: 50000, Max Length: 2048
+
+Printing loop:
+    for(i=0; i<50000; i++)
+        mymap->print(i)
+    Output: [50000 lines printed]
+
+Memory cleanup:
+    delete (mymap) - all documents freed
 
 Exit code: 1 (success)
 ```
+
+---
+
+### Scenario 8: Empty File ✗
+
+**Command:**
+```bash
+./searchengine -d empty.txt -k 10
+```
+
+**Execution:**
+```
+Arguments validated ✓
+Number parsed ✓
+
+Output: Please wait...
+
+read_sizes() called:
+    File opened successfully
+    fgetc() returns EOF (empty file)
+    Output: File is empty: empty.txt
+    Returns -1
+
+Back in main():
+    Return value == -1 → TRUE
+    return -1
+
+Exit code: -1 (error)
+
+Note: Mymap was never created (failed before line 27)
+```
+
+---
+
+### Scenario 9: Single Line File ✓
+
+**File: single.txt**
+```
+Only one line here
+```
+
+**Command:**
+```bash
+./searchengine -d single.txt -k 10
+```
+
+**Execution:**
+```
+read_sizes() result:
+    linecounter = 1
+    maxlength = 18
+
+Mymap created:
+    mymap = new Mymap(1, 18)
+
+read_input() loads:
+    documents[0] = "Only one line here"
+
+Output: File read successfully. Lines: 1, Max Length: 18
+
+Printing loop:
+    i=0: "Only one line here"
+    i=1: condition false, exit
+
+Memory cleanup:
+    delete (mymap)
+
+Exit code: 1 (success)
+```
+
+---
+
+## Error Handling Summary
+
+### All Error Cases
+
+| Error Type | Detection Point | Error Message | Cleanup Action | Exit Code |
+|------------|----------------|---------------|----------------|-----------|
+| Wrong argument count | Line 6 | "Wrong arguments. Usage: -d <file> -k <number>" | None needed | -1 |
+| Missing `-d` flag | Line 7 | "Wrong arguments. Usage: -d <file> -k <number>" | None needed | -1 |
+| Missing `-k` flag | Line 8 | "Wrong arguments. Usage: -d <file> -k <number>" | None needed | -1 |
+| Invalid integer | Line 19 | "Invalid value for -k (must be an integer)" | None needed | -1 |
+| File error (read_sizes) | Line 24 | From document_store.cpp | None needed | -1 |
+| File error (read_input) | Line 29 | From document_store.cpp | delete (mymap) | -1 |
+
+---
+
+### Error Detection Flow
+
+```
+Command-Line Errors (Caught immediately)
+    ↓
+    ├─ Argument count wrong → return -1
+    ├─ Flag position wrong → return -1
+    └─ Flag spelling wrong → return -1
+    ↓
+Integer Conversion Errors (Caught in try-catch)
+    ↓
+    ├─ Non-numeric input → return -1
+    ├─ Decimal numbers → return -1
+    └─ Empty string → return -1
+    ↓
+File Size Analysis Errors (Caught in read_sizes)
+    ↓
+    ├─ File doesn't exist → return -1
+    ├─ File empty → return -1
+    └─ Permission denied → return -1
+    ↓
+Memory Allocation
+    ↓
+    new Mymap() → Success
+    ↓
+Document Loading Errors (Caught in read_input)
+    ↓
+    ├─ File cannot be opened → delete mymap → return -1
+    ├─ Memory allocation failed → delete mymap → return -1
+    └─ Read error → delete mymap → return -1
+    ↓
+Success Path
+    ↓
+    Print documents → delete mymap → return 1
+```
+
+---
+
+## Variable Tracking Table
+
+### Variable States Throughout Execution
+
+**Successful Execution Example (3-line file):**
+
+| Line | linecounter | maxlength | k | mymap | Notes |
+|------|-------------|-----------|---|-------|-------|
+| 14 | 0 | - | - | - | Initialized |
+| 15 | 0 | -1 | - | - | Initialized |
+| 16 | 0 | -1 | <uninit> | - | Declared |
+| 18 | 0 | -1 | 5 | - | Converted from argv[4] |
+| 24 (after) | 3 | 18 | 5 | - | Updated by read_sizes() |
+| 27 | 3 | 18 | 5 | [heap addr] | Mymap created |
+| 29-32 | 3 | 18 | 5 | [has data] | Documents loaded |
+| 35-37 | 3 | 18 | 5 | [has data] | Documents printed |
+| 38 | 3 | 18 | 5 | [freed] | Memory cleaned up |
+
+---
+
+## Memory State Through Program
+
+### Memory Evolution
+
+**Start of program:**
+```
+Stack: [empty]
+Heap:  [empty]
+```
+
+**After line 16 (variables declared):**
+```
+Stack:
+  linecounter = 0
+  maxlength = -1
+  k = <uninitialized>
+
+Heap: [empty]
+```
+
+**After line 27 (Mymap created):**
+```
+Stack:
+  linecounter = 3
+  maxlength = 18
+  k = 5
+  mymap → [heap address]
+
+Heap:
+  Mymap object:
+    size = 3
+    max_length = 18
+    documents → [ptr0][ptr1][ptr2] (all nullptr)
+```
+
+**After line 32 (documents loaded):**
+```
+Stack:
+  linecounter = 3
+  maxlength = 18
+  k = 5
+  mymap → [heap address]
+
+Heap:
+  Mymap object:
+    size = 3
+    max_length = 18
+    documents → [0] → "Hello World\0"
+                [1] → "C++ Programming\0"
+                [2] → "Search Engine\0"
+```
+
+**After line 38 (cleanup):**
+```
+Stack:
+  linecounter = 3
+  maxlength = 18
+  k = 5
+  mymap → [dangling pointer]
+
+Heap: [all freed]
+```
+
+**After line 39 (program exit):**
+```
+Stack: [cleaned up by OS]
+Heap:  [cleaned up by OS]
+```
+
+---
+
+## Program Structure Analysis
+
+### Code Organization
+
+**Layers:**
+```
+main() [Searchengine.cpp]
+    ↓
+├─ Argument Validation
+├─ User Interface (cout messages)
+├─ Memory Management (new/delete)
+    ↓
+    ├─ read_sizes() [document_store.cpp]
+    │   ↓
+    │   File I/O (count lines)
+    │
+    └─ read_input() [document_store.cpp]
+        ↓
+        File I/O (load documents)
+        Mymap interaction
+```
+
+**Separation of Concerns:**
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| Main Program | `Searchengine.cpp` | CLI, flow control, memory management |
+| Document Storage | `document_store.cpp` | File I/O, document loading |
+| Data Structure | `Map.cpp` | Document container, memory management |
+
+**Benefits:**
+- ✅ Clean separation
+- ✅ Easy to test each component
+- ✅ Reusable functions
+- ✅ Clear responsibilities
+- ✅ Proper memory management
+
+---
+
+## Key Takeaways
+
+### Important Concepts
+
+1. **Command-Line Arguments**
+   - `argc` = argument count
+   - `argv` = argument vector (array of strings)
+   - Always includes program name as argv[0]
+
+2. **String Comparison**
+   - Use `strcmp()` for C-style strings
+   - Cannot use `==` (compares addresses, not content)
+   - Return value: 0 = equal, non-zero = different
+
+3. **Exception Handling**
+   - `try-catch` blocks protect against runtime errors
+   - `stoi()` throws exceptions on invalid input
+   - Better than `atoi()` which silently fails
+
+4. **Pointer Parameters**
+   - Use `&` to pass address of variable
+   - Allows function to modify original variable
+   - Common pattern for "returning" multiple values
+
+5. **Dynamic Memory**
+   - `new` allocates on heap
+   - `delete` frees memory
+   - Must match every `new` with `delete`
+   - Clean up even on error paths!
+
+6. **Error Codes**
+   - `-1` indicates error
+   - `1` indicates success
+   - Consistent throughout program
+
+---
+
+### Program Flow Summary
+
+```
+1. Validate command-line arguments (argc, flags)
+2. Notify user processing started
+3. Initialize counters
+4. Convert string parameter to integer (with error handling)
+5. Call read_sizes() to analyze file
+6. Create Mymap object with appropriate size
+7. Call read_input() to load all documents
+8. Display success message
+9. Print all loaded documents
+10. Clean up memory
+11. Return success code
+```
+
+---
+
+### Current Functionality
+
+**What the program does:**
+- ✅ Validates command-line arguments
+- ✅ Parses file path and number parameter
+- ✅ Counts lines in file
+- ✅ Finds maximum line length
+- ✅ Creates dynamic container
+- ✅ Loads all documents into memory
+- ✅ Displays all documents
+- ✅ Proper memory management
+
+**What's next (future development):**
+- 🔲 Use `k` parameter for search results
+- 🔲 Implement search functionality
+- 🔲 Read search queries
+- 🔲 Return top k results
+- 🔲 Index documents for fast searching
+- 🔲 Implement ranking algorithm
+
+---
+
+### Code Quality
+
+**Strengths:**
+- ✅ Clear error messages
+- ✅ Comprehensive validation
+- ✅ Exception handling
+- ✅ Good user feedback
+- ✅ Separation of concerns
+- ✅ Proper memory cleanup on ALL paths
+- ✅ Defensive programming
+
+**Potential Improvements:**
+```cpp
+// Add validation for k value
+if(k <= 0) {
+    cout << "Error: k must be positive" << endl;
+    return -1;
+}
+
+// Add progress indicator for large files
+if(linecounter > 10000) {
+    cout << "Loading large file..." << endl;
+}
+
+// More specific exception handling
+catch(invalid_argument& e) {
+    cout << "Invalid integer format" << endl;
+}
+catch(out_of_range& e) {
+    cout << "Number too large" << endl;
+}
+
+// Use k parameter (currently parsed but unused)
+// Will be used when search functionality is implemented
+```
+
+---
+
+## Summary
+
+This `Searchengine.cpp` file serves as the **main entry point** for the search engine application. It handles:
+
+1. **Command-line interface** - Parses and validates user input
+2. **Error handling** - Comprehensive checks at multiple levels
+3. **Memory management** - Dynamic allocation and cleanup
+4. **File processing coordination** - Orchestrates document loading
+5. **User feedback** - Clear messages for all scenarios
+6. **Data display** - Prints all loaded documents
+
+**Current State:**
+- ✅ Complete document loading system
+- ✅ Dynamic memory management
+- ✅ Error handling on all paths
+- ✅ Ready for search implementation
+
+**Key Functions Used:**
+- `main()` - Entry point
+- `strcmp()` - String comparison
+- `stoi()` - String to integer conversion
+- `read_sizes()` - File analysis (from document_store)
+- `read_input()` - Document loading (from document_store)
+- `new` / `delete` - Dynamic memory management
+
+**Key Classes Used:**
+- `Mymap` - Document container (from Map.cpp)
+
+---
+
+**Document Version**: 2.0  
+**Last Updated**: December 24, 2025  
+**Author**: High-Performance Search Engine Project  
+**Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
 
 ---
 
