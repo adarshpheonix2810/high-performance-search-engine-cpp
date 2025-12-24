@@ -24,7 +24,14 @@ int main(int argc, char** argv) {
     if(read_sizes(&linecounter, &maxlength,argv[2]) == -1){
         return -1;
     }
+
+    Mymap *mymap=new Mymap(linecounter, maxlength);
+
+    if(read_input(mymap, argv[2]) == -1){
+        delete (mymap);
+        return -1;
+    }
     cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
     return 1;
-    
+    delete (mymap);
 }
