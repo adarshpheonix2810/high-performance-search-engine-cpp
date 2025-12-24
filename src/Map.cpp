@@ -38,8 +38,36 @@ Mymap::~Mymap()
     delete[] doc_lengths;
 }
 int Mymap::insert(char* line, int i){
-    int curr;
-    char* token;
-    token=strtok(line, "\t");
-    curr=atoi(token);
+    if(line == nullptr || i < 0 || i >= size){
+        return -1;
+    }
+    
+    // Remove newline if present
+    int len = strlen(line);
+    if(len > 0 && line[len-1] == '\n'){
+        line[len-1] = '\0';
+        len--;
+    }
+    
+    // Trim leading spaces
+    char* start = line;
+    while(*start == ' ' || *start == '\t'){
+        start++;
+        len--;
+    }
+    
+    // Trim trailing spaces
+    char* end = start + len - 1;
+    while(end > start && (*end == ' ' || *end == '\t')){
+        *end = '\0';
+        end--;
+        len--;
+    }
+    
+    // Allocate memory for this document
+    documents[i] = new char[len + 1];
+    strcpy(documents[i], start);
+    doc_lengths[i] = len;
+    
+    return 1;
 } 
