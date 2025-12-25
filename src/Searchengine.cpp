@@ -26,12 +26,12 @@ int main(int argc, char** argv) {
     }
 
     Mymap *mymap=new Mymap(linecounter, maxlength);
+    TrieNode *trie=new TrieNode();
 
-    if(read_input(mymap, argv[2]) == -1){
+    if(read_input(mymap,trie, argv[2]) == -1){
         delete (mymap);
         return -1;
     }
-
     cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
     for(int i=0;i<mymap->get_size();i++){
         mymap->print(i);
