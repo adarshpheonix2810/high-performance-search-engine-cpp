@@ -8,4 +8,5 @@ include_directories(header)
 add_executable(searchengine src/Searchengine.cpp
 src/Document_store.cpp
 src/Trie.cpp
+src/Listnode.cpp
 src/Map.cpp)
