@@ -1,5 +1,9 @@
 # 🚀 High-Performance Search Engine in C++
 
+<p align="center">
+  <img src="document/pic/Searchengine.png" alt="Search Engine Architecture" width="800"/>
+</p>
+
 A **from-scratch implementation of a high-performance search engine in C++**, inspired by real-world systems like Google and Elasticsearch.  
 This project demonstrates **core systems + backend engineering concepts** such as indexing, ranking, concurrency, caching, and networking.
 
