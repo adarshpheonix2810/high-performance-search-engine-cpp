@@ -15,6 +15,8 @@ This document provides comprehensive explanations of all C file I/O functions an
 8. [getline() Windows Problem & Solutions](#topic-8-getline-windows-problem--solutions)
 9. [free() - Deallocating Memory](#topic-9-free---deallocating-memory)
 10. [read_input() - Loading Documents into Map](#topic-10-read_input---loading-documents-into-map)
+11. [strtok() and Memory Management](#topic-11-strtok-and-memory-management)
+12. [getline() Return Value Checking](#topic-12-getline-return-value-checking)
 
 ---
 
@@ -2206,6 +2208,349 @@ Understanding this function is key to seeing how raw file data becomes structure
 
 ---
 
+## Topic 11: strtok() and Memory Management
+
+### What is strtok()?
+
+`strtok()` is a C standard library function used to **tokenize** (split) a string into smaller strings based on delimiters. It's commonly used to split sentences into words.
+
+### Critical Understanding: strtok() Does NOT Allocate Memory
+
+**This is the most important concept to understand about strtok()!**
+
+```cpp
+char text[] = "hello world earth";
+char* token = strtok(text, " ");  // Returns pointer to "hello"
+```
+
+**What strtok() actually does:**
+1. Finds the first delimiter (" " in this case)
+2. **Replaces the delimiter with '\0'** in the original string
+3. **Returns a pointer to the beginning of the token**
+4. **Does NOT allocate new memory**
+
+### Visual Representation
+
+**Before strtok():**
+```
+Memory address:  [100][101][102][103][104][105][106][107][108]...
+String in memory: 'h'  'e'  'l'  'l'  'o'  ' '  'w'  'o'  'r'...
+                  ^
+                  text points here
+```
+
+**After token = strtok(text, " "):**
+```
+Memory address:  [100][101][102][103][104][105][106][107][108]...
+String in memory: 'h'  'e'  'l'  'l'  'o' '\0'  'w'  'o'  'r'...
+                  ^                        ^
+                  token points here        space replaced with \0
+```
+
+**Key Point:** `token` points to address 100 (part of original `text` array), NOT to new allocated memory!
+
+### The Critical Bug We Fixed
+
+**WRONG CODE (Memory Corruption):**
+```cpp
+void split(char* temp, int id, TrieNode* trie, Mymap* mymap){
+    char* token = strtok(temp, " \t");
+    while(token != NULL){
+        trie->insert(token, id);
+        token = strtok(NULL, " \t");
+    }
+    free(token);  // ❌❌❌ CRITICAL BUG! ❌❌❌
+}
+```
+
+**Why this is wrong:**
+1. `token` points to memory inside `temp` array
+2. `temp` is allocated elsewhere (by caller)
+3. `free(token)` tries to free memory that wasn't allocated by malloc!
+4. **Result**: Memory corruption, undefined behavior, crashes
+
+### Understanding the Fix
+
+**CORRECT CODE:**
+```cpp
+void split(char* temp, int id, TrieNode* trie, Mymap* mymap){
+    char* token = strtok(temp, " \t");
+    int i = 0;
+    while(token != NULL){
+        i++;
+        trie->insert(token, id);
+        token = strtok(NULL, " \t");
+    }
+    mymap->setlength(id, i);
+    // No free(token)! ✅ Correct - token doesn't own memory
+}
+```
+
+**Why this is correct:**
+- `token` is just a pointer to part of `temp`
+- `temp` will be freed by the caller (read_input function)
+- No memory leak because no new allocation was made
+
+### Memory Ownership Rule
+
+**Golden Rule:** Only free() memory that was allocated with malloc() (or realloc())
+
+| Function | Allocates New Memory? | Need to free()? |
+|----------|----------------------|-----------------|
+| `malloc()` | ✅ Yes | ✅ Yes |
+| `realloc()` | ✅ Yes | ✅ Yes |
+| `getline()` | ✅ Yes (internally) | ✅ Yes |
+| `strtok()` | ❌ No | ❌ No |
+| Regular assignment | ❌ No | ❌ No |
+
+### Complete Example
+
+```cpp
+// Memory allocation and tokenization
+char* text = (char*)malloc(100);        // ✅ malloc allocates
+strcpy(text, "hello world earth");
+
+char* token = strtok(text, " ");        // token points INTO text
+while(token != NULL){
+    printf("%s\n", token);               // Use token
+    token = strtok(NULL, " ");           // Next token
+}
+
+free(text);    // ✅ Free the malloc'd memory
+// Do NOT free(token)!  ❌ token doesn't own memory
+```
+
+### Visual Memory Layout
+
+```
+Heap Memory:
++---+---+---+---+---+---+---+---+---+---+---+---+
+| h | e | l | l | o |\0 | w | o | r | l | d |\0 |
++---+---+---+---+---+---+---+---+---+---+---+---+
+^                       ^
+|                       |
+text (malloc'd)         token points here (part of text)
+
+When you free(text):  ✅ Frees entire block
+If you free(token):   ❌ Tries to free middle of block = CRASH!
+```
+
+### Key Takeaways
+
+1. **strtok() modifies the original string** (replaces delimiters with '\0')
+2. **strtok() returns pointers, doesn't allocate** new memory
+3. **Never free() a strtok() return value** - it's not malloc'd
+4. **Only free() the original buffer** that was tokenized
+5. **strtok() is stateful** - uses internal static variable
+
+### Real-World Impact
+
+**Before fix:** Potential crashes when calling split()  
+**After fix:** Stable, no memory corruption  
+**Lesson:** Understanding memory ownership prevents critical bugs  
+
+---
+
+## Topic 12: getline() Return Value Checking
+
+### What is getline() Return Value?
+
+`getline()` is a POSIX function that reads an entire line from a file. It returns the **number of characters read**, or `-1` on failure.
+
+### Function Signature
+
+```c
+ssize_t getline(char **lineptr, size_t *n, FILE *stream);
+```
+
+**Return Values:**
+- **Positive number**: Successfully read that many characters
+- **-1**: End-of-file reached OR an error occurred
+
+### The Bug We Fixed
+
+**WRONG CODE (No Error Checking):**
+```cpp
+for(int i = 0; i < mymap->get_size(); i++){
+    getline(&line, &buffersize, file);  // ❌ No check!
+    if (mymap->insert(line, i) == -1) {
+        // ...
+    }
+}
+```
+
+**Problems:**
+1. If file has fewer lines than expected, getline() returns -1
+2. `line` might be NULL or contain garbage
+3. `mymap->insert(line, i)` processes invalid data
+4. No cleanup happens on error
+
+### Why This Bug Matters
+
+**Scenario:**
+```cpp
+// Expected: 10 documents
+Mymap* map = new Mymap(10, 1000);
+
+// But file only has 7 lines!
+read_input(map, trie, "data.txt");
+```
+
+**What happens without check:**
+```
+i=0: getline() returns 50  ✅ Read line 1
+i=1: getline() returns 48  ✅ Read line 2
+...
+i=6: getline() returns 42  ✅ Read line 7
+i=7: getline() returns -1  ❌ EOF! No more lines
+     → line might be NULL
+     → insert(NULL, 7) crashes or undefined behavior
+i=8: getline() returns -1  ❌ Still EOF
+     → More bad data inserted
+i=9: getline() returns -1  ❌ Still EOF
+     → Even more bad data
+```
+
+### The Fix - Proper Error Handling
+
+**CORRECT CODE:**
+```cpp
+for(int i = 0; i < mymap->get_size(); i++){
+    if(getline(&line, &buffersize, file) == -1){  // ✅ Check return value
+        cout << "Error reading line " << i << endl;
+        free(line);
+        fclose(file);
+        free(temp);
+        return -1;
+    }
+    if (mymap->insert(line, i) == -1) {
+        // ... existing error handling
+    }
+}
+```
+
+**What this does:**
+1. **Checks if getline() succeeded** before using the data
+2. **Prints informative error** showing which line failed
+3. **Cleans up all resources** (frees memory, closes file)
+4. **Returns error code** to caller
+5. **Prevents processing invalid data**
+
+### Visual Flow Comparison
+
+**Without Error Check:**
+```
+read_input() called
+  ↓
+Loop iteration i=7
+  ↓
+getline() → returns -1 (EOF)
+  ↓
+insert(garbage, 7) ❌ Undefined behavior!
+  ↓
+Loop continues
+  ↓
+More bad inserts...
+```
+
+**With Error Check:**
+```
+read_input() called
+  ↓
+Loop iteration i=7
+  ↓
+getline() → returns -1 (EOF)
+  ↓
+Check: if (getline() == -1) ✅ TRUE
+  ↓
+Print error message
+  ↓
+free(line)
+  ↓
+fclose(file)
+  ↓
+free(temp)
+  ↓
+return -1 (error)
+  ↓
+Caller handles error properly
+```
+
+### Complete Corrected Function
+
+```cpp
+int read_input(Mymap* mymap, TrieNode *trie, char* file_name){
+    FILE *file = fopen(file_name, "r");
+    if(file == NULL){                          // ✅ Check fopen
+        cout << "Error opening file: " << file_name << endl;
+        return -1;
+    }
+    
+    char *line = NULL;
+    size_t buffersize = 0;
+    char *temp = (char*)malloc(mymap->get_buffersize() * sizeof(char));
+    
+    for(int i = 0; i < mymap->get_size(); i++){
+        if(getline(&line, &buffersize, file) == -1){  // ✅ Check getline
+            cout << "Error reading line " << i << endl;
+            free(line);
+            fclose(file);
+            free(temp);
+            return -1;
+        }
+        
+        if (mymap->insert(line, i) == -1) {    // ✅ Check insert
+            cout << "Error inserting line " << endl;
+            free(line);
+            fclose(file);
+            free(temp);
+            return -1;
+        }
+        
+        strcpy(temp, mymap->getDocument(i));
+        split(temp, i, trie, mymap);
+        
+        free(line);
+        line = NULL;
+        buffersize = 0;
+    }
+    
+    free(line);
+    fclose(file);
+    free(temp);
+    return 1;
+}
+```
+
+### Error Handling Best Practices
+
+✅ **Always check return values** of I/O functions  
+✅ **Provide informative error messages** with context  
+✅ **Clean up all resources** before returning from error  
+✅ **Use consistent error codes** (-1 for errors, 1 for success)  
+✅ **Fail fast** - return immediately on error  
+
+### Common getline() Return Values
+
+| Return Value | Meaning | Action |
+|-------------|---------|--------|
+| `> 0` | Success - number of chars read | Use the data |
+| `0` | Empty line read | Valid, process it |
+| `-1` | EOF or error | Check, cleanup, return error |
+
+### Real-World Impact
+
+**Before fix:** Silent failures, corrupted data structures  
+**After fix:** Explicit errors, proper cleanup, debugging-friendly  
+**Lesson:** Checking return values prevents hard-to-debug issues  
+
+---
+
+### Summary of All Topics
+
+1. **fopen()**: Opens files, returns FILE* or NULL
+2. **fclose()**: Closes files, flushes buffers
+3. **fgetc()**: Reads single character (peek for empty file check)
 4. **eof()**: Detects end-of-file condition (after read fails)
 5. **ungetc()**: Pushes character back to stream (peek functionality)
 6. **size_t**: Unsigned integer type for sizes and counts
@@ -2213,6 +2558,8 @@ Understanding this function is key to seeing how raw file data becomes structure
 8. **Windows Bug**: getline() hangs on empty files - solution: check first with fgetc()
 9. **free()**: Deallocates dynamically allocated memory
 10. **read_input()**: Reads file line-by-line and inserts into Mymap container
+11. **strtok() Memory**: Returns pointers, doesn't allocate - never free() them
+12. **getline() Return Check**: Always validate return value before using data
 
 ### Key Takeaways for Beginners
 
@@ -2224,10 +2571,13 @@ Understanding this function is key to seeing how raw file data becomes structure
 - Check for empty files before `getline()` on Windows
 - Understand the difference between stack and heap memory
 - Clean up resources on error (close files, free memory)
+- **Never free() strtok() return values** - they don't own memory
+- **Always check getline() return value** - prevents processing garbage
 
 ---
 
-**Document Version**: 1.1  
-**Last Updated**: December 24, 2025  
+**Document Version**: 1.2  
+**Last Updated**: December 26, 2025  
+**Changes**: Added strtok() memory management and getline() return checking  
 **Author**: High-Performance Search Engine Project  
 **Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
