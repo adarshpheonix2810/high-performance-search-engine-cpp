@@ -2864,30 +2864,343 @@ catch(out_of_range& e) {
 
 ---
 
+## December 26, 2025 Update - Critical Fixes
+
+### Changes Made Today
+
+Today we fixed two important issues in `Searchengine.cpp` that improve standards compliance and code consistency.
+
+---
+
+### Fix 1: Corrected main() Return Value
+
+**File Changed**: `src/Searchengine.cpp` line 42  
+**What Changed**: Changed `return 1;` to `return 0;`
+
+**Before (WRONG):**
+```cpp
+int main(int argc, char** argv) {
+    // ... all program logic ...
+    
+    cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
+    
+    delete (mymap);
+    delete (trie);
+    return 1;  // ❌ Returns 1 even on success!
+}
+```
+
+**After (CORRECT):**
+```cpp
+int main(int argc, char** argv) {
+    // ... all program logic ...
+    
+    cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
+    
+    delete (mymap);
+    delete (trie);
+    return 0;  // ✅ Returns 0 on success!
+}
+```
+
+**Why This Matters:**
+
+**Unix/POSIX Standard Convention:**
+- `0` = Success
+- `Non-zero` = Failure/Error
+
+**Real-World Impact:**
+
+**Example 1: Shell Scripts**
+```bash
+#!/bin/bash
+./searchengine -d data.txt -k 5
+
+# Check exit code
+if [ $? -eq 0 ]; then
+    echo "✅ Search engine ran successfully"
+    # Continue with next step
+else
+    echo "❌ Search engine failed"
+    exit 1
+fi
+```
+
+**Before Fix:**
+```bash
+$ ./searchengine -d data.txt -k 5
+Please wait...
+File read successfully. Lines: 10, Max Length: 100
+
+$ echo $?
+1    # ❌ Returns 1 (error code) even though it succeeded!
+
+# Shell script thinks it failed
+❌ Search engine failed
+```
+
+**After Fix:**
+```bash
+$ ./searchengine -d data.txt -k 5
+Please wait...
+File read successfully. Lines: 10, Max Length: 100
+
+$ echo $?
+0    # ✅ Returns 0 (success code) correctly!
+
+# Shell script knows it succeeded
+✅ Search engine ran successfully
+```
+
+**Example 2: Makefile Automation**
+```makefile
+test: searchengine
+	./searchengine -d test_data.txt -k 10
+	@echo "Test passed!"  # Only runs if return 0
+```
+
+**Example 3: CI/CD Pipelines**
+```yaml
+# GitHub Actions, GitLab CI, etc.
+steps:
+  - name: Run Search Engine
+    run: ./searchengine -d docs.txt -k 5
+    # Fails the pipeline if return != 0
+```
+
+**Complete Return Value Pattern:**
+
+Our code now follows proper error handling:
+
+```cpp
+int main(int argc, char** argv) {
+    // Error Case 1: Wrong arguments
+    if (argc != 5 || strcmp(argv[1], "-d") != 0) {
+        cout << "Wrong arguments..." << endl;
+        return -1;  // ❌ Error - return non-zero
+    }
+    
+    // Error Case 2: Invalid integer
+    try {
+        k = stoi(argv[4]);
+    } catch (...) {
+        cout << "Invalid value for -k..." << endl;
+        return -1;  // ❌ Error - return non-zero
+    }
+    
+    // Error Case 3: File reading failed
+    if(read_sizes(&linecounter, &maxlength, argv[2]) == -1){
+        return -1;  // ❌ Error - return non-zero
+    }
+    
+    // Error Case 4: Document loading failed
+    if(read_input(mymap, trie, argv[2]) == -1){
+        delete (mymap);
+        return -1;  // ❌ Error - return non-zero
+    }
+    
+    // Success: Everything worked!
+    delete (mymap);
+    delete (trie);
+    return 0;  // ✅ Success - return 0
+}
+```
+
+**Benefits:**
+- ✅ Follows Unix/POSIX standard
+- ✅ Works correctly with shell scripts
+- ✅ Compatible with CI/CD pipelines
+- ✅ Proper automation support
+- ✅ Professional, portable code
+
+---
+
+### Fix 2: Cleaned Up Include Paths in Searchengine.hpp
+
+**File Changed**: `header/Searchengine.hpp` lines 4-5  
+**What Changed**: Removed `./` prefix from include directives
+
+**Before (INCONSISTENT):**
+```cpp
+#include <iostream>
+#include <cstring>
+#include <cstdlib>
+#include "./Document_store.hpp"  // ❌ Has ./ prefix
+#include "./Map.hpp"              // ❌ Has ./ prefix
+#include "Trie.hpp"               // ✅ No prefix - inconsistent!
+```
+
+**After (CONSISTENT):**
+```cpp
+#include <iostream>
+#include <cstring>
+#include <cstdlib>
+#include "Document_store.hpp"    // ✅ Clean
+#include "Map.hpp"                // ✅ Clean
+#include "Trie.hpp"               // ✅ Clean - all consistent!
+```
+
+**Why Remove `./` Prefix?**
+
+**Reason 1: CMake Configuration**
+```cmake
+# CMakeLists.txt
+include_directories(header)  # Tell compiler where to find headers
+```
+
+With this CMake directive, the compiler already knows to look in `header/` directory. The `./` prefix is redundant.
+
+**Reason 2: Consistency**
+- All other source files use clean includes: `#include "Map.hpp"`
+- Mixing styles is confusing and unprofessional
+- Standard practice is to use clean paths when include_directories is set
+
+**Reason 3: Portability**
+```cpp
+// Works on all platforms:
+#include "Map.hpp"
+
+// Might have issues on some systems:
+#include "./Map.hpp"
+#include "../header/Map.hpp"
+```
+
+**How Include Path Resolution Works:**
+
+**Compiler Search Order:**
+1. Current directory
+2. Directories specified by `-I` flags (from CMake's `include_directories`)
+3. System include paths
+
+**Example:**
+```bash
+# CMake generates this:
+g++ -I./header src/Searchengine.cpp
+
+# So the compiler looks for "Map.hpp" in:
+# 1. Current directory (./src/)
+# 2. Include directory (./header/) ← FOUND HERE!
+```
+
+**Benefits of Clean Includes:**
+- ✅ Matches coding standards
+- ✅ Consistent across all files  
+- ✅ Works with CMake include_directories
+- ✅ More readable
+- ✅ Easier to maintain
+
+---
+
+### Updated Complete Source Code
+
+**Current Searchengine.cpp (After Fixes):**
+```cpp
+#include "Searchengine.hpp"
+
+using namespace std;
+
+// read document/books/searchengine.md for more information
+int main(int argc, char** argv) {
+    if (argc != 5 ||
+        strcmp(argv[1], "-d") != 0 ||
+        strcmp(argv[3], "-k") != 0) {
+        cout << "Wrong arguments. Usage: -d <file> -k <number>" << endl;
+        return -1;  // ✅ Error: wrong arguments
+    }
+
+    cout << "Please wait..." << endl;
+    int linecounter = 0;
+    int maxlength = -1;
+    int k;
+    try {
+        k = stoi(argv[4]); 
+    } catch (...) {
+        cout << "Invalid value for -k (must be an integer)" << endl;
+        return -1;  // ✅ Error: invalid integer
+    }
+    
+    if(read_sizes(&linecounter, &maxlength, argv[2]) == -1){
+        return -1;  // ✅ Error: file reading failed
+    }
+
+    Mymap *mymap = new Mymap(linecounter, maxlength);
+    TrieNode *trie = new TrieNode();
+
+    if(read_input(mymap, trie, argv[2]) == -1){
+        delete (mymap);
+        return -1;  // ✅ Error: document loading failed
+    }
+    
+    cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
+    
+    delete (mymap);
+    delete (trie);
+    return 0;  // ✅ Success: return 0
+}
+```
+
+**Current Searchengine.hpp (After Fixes):**
+```cpp
+#include <iostream>
+#include <cstring>
+#include <cstdlib>
+#include "Document_store.hpp"  // ✅ Clean include
+#include "Map.hpp"              // ✅ Clean include
+#include "Trie.hpp"             // ✅ Clean include
+```
+
+---
+
+### Summary of December 26 Fixes
+
+| Fix # | File | Line | Change | Reason |
+|-------|------|------|--------|--------|
+| 1 | Searchengine.cpp | 42 | `return 1` → `return 0` | Follow Unix standard |
+| 2 | Searchengine.hpp | 4-5 | Remove `./` prefix | Consistency & CMake |
+
+### Code Quality Improvements
+
+✅ **Standards Compliance** - Returns 0 for success per Unix convention  
+✅ **Automation Support** - Works correctly with shell scripts and CI/CD  
+✅ **Consistency** - All includes follow same pattern  
+✅ **Portability** - Clean includes work on all platforms  
+✅ **Professional** - Follows best practices  
+
+---
+
 ## Summary
 
 This `Searchengine.cpp` file serves as the **main entry point** for the search engine application. It handles:
 
 1. **Command-line interface** - Parses and validates user input
 2. **Error handling** - Comprehensive checks at multiple levels
-3. **File processing coordination** - Calls `read_sizes()` from document_store
+3. **File processing coordination** - Calls `read_sizes()` and `read_input()` 
 4. **User feedback** - Clear messages for all scenarios
+5. **Standards compliance** - Proper return values for automation
 
 **Current State:**
-- Foundation for search engine
+- Foundation for search engine complete
 - Argument parsing complete
 - File reading complete
+- Error handling robust
 - Ready for search implementation
 
 **Key Functions:**
-- `main()` - Entry point
+- `main()` - Entry point with proper return values
 - `strcmp()` - String comparison
-- `stoi()` - String to integer conversion
-- `read_sizes()` - File processing (from document_store)
+- `stoi()` - String to integer conversion with exception handling
+- `read_sizes()` - File size analysis
+- `read_input()` - Document loading
+
+**Recent Improvements (Dec 26):**
+- Fixed return value to follow Unix standard (0 = success)
+- Cleaned up include paths for consistency
+- Enhanced automation compatibility
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 23, 2025  
+**Document Version**: 1.1  
+**Last Updated**: December 26, 2025  
+**Changes**: Added December 26 fixes documentation  
 **Author**: High-Performance Search Engine Project  
 **Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
