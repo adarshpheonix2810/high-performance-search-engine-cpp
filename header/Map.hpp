@@ -24,7 +24,7 @@ public:
     void print(int i){
         cout << "Document " << i << ": " << documents[i] << endl;
     }
-    char* getDocument(int i){
+    const char* getDocument(int i) const {
         return documents[i];
     }
     
