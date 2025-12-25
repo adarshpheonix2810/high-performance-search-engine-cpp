@@ -1377,6 +1377,235 @@ map->insert(nullptr, 0);
 
 ---
 
+## December 26, 2025 Update - Critical Fixes
+
+### Changes Made Today
+
+Today we made important fixes to the Map class to improve correctness and prepare for future BM25 search implementation.
+
+### Fix 1: doc_lengths Now Stores Word Count
+
+**File Changed**: `src/Map.cpp` line 71  
+**What Changed**: Removed `doc_lengths[i] = len;` assignment
+
+**Before:**
+```cpp
+// Allocate memory for this document
+documents[i] = new char[len + 1];
+strcpy(documents[i], start);
+doc_lengths[i] = len;  // ❌ Stored character count
+```
+
+**After:**
+```cpp
+// Allocate memory for this document
+documents[i] = new char[len + 1];
+strcpy(documents[i], start);
+// doc_lengths will be set by split() with word count for BM25
+```
+
+**Why the change?**
+
+The `doc_lengths` array now stores **word count** instead of **character count**. This is necessary for the BM25 ranking algorithm which requires calculating average document length (avgdl) in terms of words, not characters.
+
+**How it works now:**
+
+1. `Map::insert()` stores the document text but doesn't set `doc_lengths[i]`
+2. `split()` function in document_store.cpp counts words while tokenizing
+3. `split()` calls `mymap->setlength(id, wordCount)` to store the count
+
+**Code Flow:**
+```
+read_input() 
+  → mymap->insert(line, i)     // Stores document text
+  → split(temp, i, trie, mymap) // Counts words while building Trie
+     → mymap->setlength(i, wordCount)  // Sets doc_lengths[i]
+```
+
+**Example:**
+```cpp
+// Document: "hello world from earth"
+// Character count: 23
+// Word count: 4
+
+// Old behavior:
+doc_lengths[0] = 23;  // ❌ Not useful for BM25
+
+// New behavior:
+doc_lengths[0] = 4;   // ✅ Correct for avgdl calculation
+```
+
+**Future usage in BM25:**
+```cpp
+// Calculate average document length
+double avgdl = 0;
+for(int i = 0; i < map->get_size(); i++){
+    avgdl += map->getlength(i);  // Sum word counts
+}
+avgdl /= map->get_size();  // avgdl = 2.33 words (example)
+
+// Use in BM25 formula
+score = IDF * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * docLength / avgdl));
+```
+
+---
+
+### Fix 2: Removed Large Comment Block
+
+**File Changed**: `src/Map.cpp` lines 10-24  
+**What Changed**: Cleaned up verbose inline comments
+
+**Before:**
+```cpp
+    documents = new char *[size];
+    doc_lengths = new int[size];
+
+    /* Initialize to nullptr/0
+    Mymap map(3, 100);  // 3 documents, max length 100
+    Without initialization:
+    documents[0] = 0x00FF8821 (random garbage)
+    documents[1] = 0xDEADBEEF (random garbage)
+    documents[2] = 0x12345678 (random garbage)
+    Destructor tries to delete these = CRASH! 💥
+
+    With initialization:
+    documents[0] = nullptr ✅
+    documents[1] = nullptr ✅
+    documents[2] = nullptr ✅
+    Destructor checks nullptr first = Safe! ✅
+    */
+    for (int i = 0; i < size; i++)
+```
+
+**After:**
+```cpp
+    documents = new char *[size];
+    doc_lengths = new int[size];
+
+    // Initialize to prevent undefined behavior
+    for (int i = 0; i < size; i++)
+```
+
+**Why the change?**
+- Long explanatory comments belong in documentation, not production code
+- Keeps source code clean and readable
+- The concept is already explained in detail in `map.md` documentation
+- Professional codebases use concise comments in source files
+
+**Best Practice:**
+- ✅ Short comments in `.cpp` files (what the code does)
+- ✅ Detailed explanations in `.md` files (why and how)
+- ❌ Multi-line tutorial comments in source code
+
+---
+
+### Fix 3: Added const Correctness to getDocument()
+
+**File Changed**: `header/Map.hpp` line 26  
+**What Changed**: Made `getDocument()` a const method returning const pointer
+
+**Before:**
+```cpp
+char* getDocument(int i){
+    return documents[i];
+}
+```
+
+**After:**
+```cpp
+const char* getDocument(int i) const {
+    return documents[i];
+}
+```
+
+**What this means:**
+
+**First `const` (return type):**
+- `const char*` means the **returned pointer points to const data**
+- Caller cannot modify the document string through this pointer
+- Enforces read-only access
+
+**Second `const` (method):**
+- `const` after parameter list means **this method doesn't modify the object**
+- Can be called on const Mymap objects
+- Compiler enforces no member variables are changed
+
+**Example usage:**
+```cpp
+Mymap map(3, 100);
+// ... load documents ...
+
+const char* doc = map.getDocument(0);  // ✅ Get document
+cout << doc;                            // ✅ Can read
+doc[0] = 'X';                          // ❌ Compile ERROR - const data
+
+// Works with const objects:
+void processMap(const Mymap& map){
+    const char* doc = map.getDocument(0);  // ✅ OK - const method
+}
+```
+
+**Benefits:**
+- ✅ Prevents accidental document modification
+- ✅ Makes interface safer and clearer
+- ✅ Enables const object usage
+- ✅ Better compiler optimization
+
+---
+
+### Fix 4: Include Path Cleanup
+
+**File Changed**: `src/Map.cpp` line 1  
+**What Changed**: Removed `./` prefix for consistency
+
+**Before:**
+```cpp
+#include "./Map.hpp"
+```
+
+**After:**
+```cpp
+#include "Map.hpp"
+```
+
+**Why the change?**
+- CMakeLists.txt already includes `header/` directory
+- `./` prefix is redundant and inconsistent with other files
+- All other source files use direct includes
+- Cleaner and more portable
+
+**How CMake handles it:**
+```cmake
+include_directories(header)  # Tells compiler to look in header/
+
+# Now all source files can use:
+#include "Map.hpp"          // ✅ Clean
+# Instead of:
+#include "./Map.hpp"        // ❌ Redundant
+#include "../header/Map.hpp" // ❌ Verbose
+```
+
+---
+
+### Summary of Today's Changes
+
+| File | Line | Change | Reason |
+|------|------|--------|--------|
+| Map.cpp | 71 | Removed `doc_lengths[i] = len` | Store word count for BM25 |
+| Map.cpp | 10-24 | Removed comment block | Keep code clean |
+| Map.cpp | 1 | Removed `./` from include | Consistency |
+| Map.hpp | 26 | Added const correctness | Safety and const objects |
+
+### Code Quality Improvements
+
+✅ **Correctness** - doc_lengths now stores right data for algorithms  
+✅ **Readability** - Removed clutter from source files  
+✅ **Safety** - Added const correctness to prevent bugs  
+✅ **Consistency** - Standardized include paths  
+✅ **Future-proof** - Ready for BM25 implementation  
+
+---
+
 ### Memory Safety Features
 
 ✅ **Null pointer initialization** - All pointers start as nullptr  
@@ -1384,6 +1613,7 @@ map->insert(nullptr, 0);
 ✅ **Proper cleanup** - Destructor frees all memory  
 ✅ **Safe deletion** - delete[] nullptr is safe  
 ✅ **Dynamic allocation** - Only allocates what's needed  
+✅ **Const protection** - Prevents accidental data modification  
 
 ---
 
@@ -1395,6 +1625,7 @@ map->insert(nullptr, 0);
 - ✅ Input validation before processing
 - ✅ Memory-efficient (variable-size allocation)
 - ✅ Safe initialization
+- ✅ const correctness for getters
 
 **Potential Improvements:**
 - Add bounds checking to `getDocument()` and `getlength()`
@@ -1404,6 +1635,7 @@ map->insert(nullptr, 0);
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 24, 2025  
+**Document Version**: 1.1  
+**Last Updated**: December 26, 2025  
+**Changes**: Added December 26 fixes documentation  
 **Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
