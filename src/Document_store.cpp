@@ -35,24 +35,31 @@ int read_sizes(int *linecounter,int *maxlength, char *file_name){
     free(line);
     return 1;
 }
-int read_input(Mymap* mymap, char* file_name){
+void split(char* temp,int id,TrieNode* trie,Mymap* mymap){
+}
+int read_input(Mymap* mymap,TrieNode *trie, char* file_name){
     FILE *file = fopen(file_name, "r");
     char *line = NULL;
     size_t buffersize = 0;
     int current_length;
+    char *temp = (char*)malloc(mymap->get_buffersize()*sizeof(char));
     for(int i=0;i<mymap->get_size();i++){
         getline(&line, &buffersize, file);
         if (mymap->insert(line, i) == -1) {
             cout << "Error inserting line " << endl;
             free(line);
             fclose(file);
+            free(temp);
             return -1;
         }
+        strcpy(temp,mymap->getDocument(i));
+        split(temp,i,trie,mymap);
         free(line);
         line = NULL;
         buffersize = 0;
     }
     free(line);
     fclose(file);
+    free(temp);
     return 1;
 }
