@@ -33,9 +33,8 @@ int main(int argc, char** argv) {
         return -1;
     }
     cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
-    for(int i=0;i<mymap->get_size();i++){
-        mymap->print(i);
-    }
+    
     delete (mymap);
-    return 1;
+    delete (trie);
+    return 0;
 }
