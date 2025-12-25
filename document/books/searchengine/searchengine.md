@@ -702,13 +702,277 @@ All follow the same exception-based error handling pattern.
 
 ---
 
+## 4. Understanding main() Return Values
+
+### 4.1 What Does main() Return Value Mean?
+
+In C and C++, the `main()` function returns an integer value to the operating system indicating whether the program executed successfully or encountered an error.
+
+### 4.2 The Standard Convention
+
+**Unix/Linux/POSIX Standard:**
+- **0** = Success (program completed without errors)
+- **Non-zero** = Failure (error occurred)
+
+```cpp
+int main() {
+    // ... program logic ...
+    
+    if (everything_went_well) {
+        return 0;  // ✅ Success
+    } else {
+        return 1;  // ❌ Error
+    }
+}
+```
+
+### 4.3 Why This Matters?
+
+**Shell Scripts and Automation:**
+```bash
+#!/bin/bash
+./searchengine -d data.txt -k 5
+
+if [ $? -eq 0 ]; then
+    echo "Search completed successfully"
+else
+    echo "Search failed with error"
+fi
+```
+
+The shell variable `$?` stores the return value (exit code) of the last command.
+
+**Example:**
+```bash
+$ ./searchengine -d data.txt -k 5
+File read successfully. Lines: 10, Max Length: 100
+
+$ echo $?
+0    # ✅ Success - returned 0
+
+$ ./searchengine -d missing.txt -k 5
+Error opening file: missing.txt
+
+$ echo $?
+1    # ❌ Error - returned non-zero
+```
+
+### 4.4 Our Fix - December 26, 2025
+
+**Before (WRONG):**
+```cpp
+int main(int argc, char** argv) {
+    // ... all the logic ...
+    
+    delete (mymap);
+    delete (trie);
+    return 1;  // ❌ Always returns 1 (error code)
+}
+```
+
+**Problem:**
+- Returns `1` even when program succeeds
+- Shell scripts think the program failed
+- Violates standard convention
+- Confusing for automation tools
+
+**After (CORRECT):**
+```cpp
+int main(int argc, char** argv) {
+    // ... all the logic ...
+    
+    delete (mymap);
+    delete (trie);
+    return 0;  // ✅ Returns 0 (success)
+}
+```
+
+**Impact:**
+- ✅ Follows Unix/POSIX standard
+- ✅ Shell scripts work correctly
+- ✅ Can be used in pipelines and automation
+- ✅ Professional, portable code
+
+### 4.5 Complete Error Handling Pattern
+
+```cpp
+int main(int argc, char** argv) {
+    // Validate arguments
+    if (argc != 5 || strcmp(argv[1], "-d") != 0) {
+        cout << "Wrong arguments" << endl;
+        return -1;  // ❌ Error in arguments
+    }
+    
+    // Allocate resources
+    Mymap *mymap = new Mymap(linecounter, maxlength);
+    TrieNode *trie = new TrieNode();
+    
+    // Read input
+    if(read_input(mymap, trie, argv[2]) == -1){
+        delete (mymap);
+        return -1;  // ❌ Error reading file
+    }
+    
+    // Success!
+    delete (mymap);
+    delete (trie);
+    return 0;  // ✅ Success
+}
+```
+
+### 4.6 Common Exit Codes
+
+| Code | Meaning | Usage |
+|------|---------|-------|
+| 0 | Success | Everything worked |
+| 1 | General error | Something went wrong |
+| 2 | Misuse of command | Wrong arguments |
+| 126 | Command cannot execute | Permission issue |
+| 127 | Command not found | Binary missing |
+| 128+n | Fatal error signal n | Crash/signal |
+
+### 4.7 Best Practices
+
+✅ Return 0 for success  
+✅ Return non-zero for errors  
+✅ Use different error codes for different failures  
+✅ Document error codes in README  
+✅ Clean up resources before returning  
+
+---
+
+## 5. Understanding Header Guards and Include Paths
+
+### 5.1 Header Guard Naming Conventions
+
+Header guards prevent multiple inclusion of the same header file. The naming convention should be **consistent** across all header files.
+
+### 5.2 Common Naming Patterns
+
+**Pattern 1: _H suffix**
+```cpp
+#ifndef MYCLASS_H
+#define MYCLASS_H
+// ...
+#endif
+```
+
+**Pattern 2: _HPP suffix**
+```cpp
+#ifndef MYCLASS_HPP
+#define MYCLASS_HPP
+// ...
+#endif
+```
+
+**Pattern 3: Full path**
+```cpp
+#ifndef PROJECT_HEADER_MYCLASS_HPP
+#define PROJECT_HEADER_MYCLASS_HPP
+// ...
+#endif
+```
+
+### 5.3 Our Standardization - December 26, 2025
+
+**Before (INCONSISTENT):**
+```cpp
+// Listnode.hpp
+#ifndef LISTNODE_H    // ❌ Uses _H
+#define LISTNODE_H
+
+// Map.hpp
+#ifndef MAP_HPP       // ✅ Uses _HPP
+#define MAP_HPP
+
+// Trie.hpp  
+#ifndef TRIE_HPP      // ✅ Uses _HPP
+#define TRIE_HPP
+```
+
+**After (CONSISTENT):**
+```cpp
+// All files now use _HPP
+#ifndef LISTNODE_HPP  // ✅ Consistent
+#define LISTNODE_HPP
+
+#ifndef MAP_HPP       // ✅ Consistent
+#define MAP_HPP
+
+#ifndef TRIE_HPP      // ✅ Consistent
+#define TRIE_HPP
+```
+
+**Why standardize?**
+- ✅ Cleaner codebase
+- ✅ Easier to remember
+- ✅ Professional appearance
+- ✅ Matches C++ file extension (.hpp)
+
+### 5.4 Include Path Best Practices
+
+**CMake include_directories:**
+```cmake
+include_directories(header)  # Tell compiler where headers are
+```
+
+**Then in source files:**
+```cpp
+// ✅ GOOD - Clean and simple
+#include "Map.hpp"
+#include "Trie.hpp"
+
+// ❌ BAD - Redundant prefix
+#include "./Map.hpp"
+#include "./Trie.hpp"
+
+// ❌ BAD - Explicit path (breaks when reorganizing)
+#include "../header/Map.hpp"
+```
+
+### 5.5 Our Fix - Removed ./ Prefixes
+
+**Files Changed:**
+- `src/Map.cpp` line 1
+- `header/Searchengine.hpp` lines 4-5
+
+**Before:**
+```cpp
+// Searchengine.hpp
+#include "./Document_store.hpp"
+#include "./Map.hpp"
+#include "Trie.hpp"  // Inconsistent!
+```
+
+**After:**
+```cpp
+// Searchengine.hpp
+#include "Document_store.hpp"
+#include "Map.hpp"
+#include "Trie.hpp"  // All consistent!
+```
+
+**Benefits:**
+- ✅ Consistency across all includes
+- ✅ Cleaner code
+- ✅ Works with CMake include path
+- ✅ More portable
+
+---
+
 ## References
 
 For more information, visit:  
 - [What does int argc, char *argv[] mean?](https://stackoverflow.com/questions/3024197/what-does-int-argc-char-argv-mean)
 - [C++ strcmp() Reference](https://cplusplus.com/reference/cstring/strcmp/)
-- [String Comparison in C/C++](https://en.cppreference.com/w/cpp/string/byte/strcmp)
+- [String Comparison in C/C++](https://en.cppreference.com/w/cpp/string/byte/strcmp/)
+- [Exit Status (Unix)](https://en.wikipedia.org/wiki/Exit_status)
+- [Header Guards](https://en.cppreference.com/w/cpp/preprocessor/include)
 
 ---
+
+**Document Version**: 1.1  
+**Last Updated**: December 26, 2025  
+**Changes**: Added main() return values, header guard consistency, and include path documentation  
 
 *Documentation created for educational purposes to help understand the Search Engine project implementation.*
