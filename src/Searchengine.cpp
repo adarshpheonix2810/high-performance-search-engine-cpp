@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
 
     if(read_input(mymap,trie, argv[2]) == -1){
         delete (mymap);
+        delete (trie);
         return -1;
     }
     cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
@@ -68,18 +69,19 @@ int main(int argc, char** argv) {
         cout << "Enter query (or type '/exit' to quit): ";
         if(getline(&input, &input_length, stdin) == -1){
             // EOF or error
+            free(input);
             break;
         }
         
         int ret=inputmanager(input,trie,mymap,k);
         if(ret==2){
             cout<<"Exiting program..."<<endl;
+            free(input);
             break;
         }
         // ret == 0 or 1: continue
     }
     
-    free(input);
     delete (mymap);
     delete (trie);
     return 0;
