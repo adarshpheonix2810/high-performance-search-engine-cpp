@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstring>
 #include <cstdlib>
+#include <cctype>
 #include "Map.hpp"
 #include "Trie.hpp"
 
