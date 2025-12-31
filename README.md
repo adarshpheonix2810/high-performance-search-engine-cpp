@@ -39,17 +39,20 @@ Understanding how search engines work is fundamental to backend engineering. Thi
 
 ### 🔍 Core Search Capabilities
 - ✅ **Inverted Index** - Fast document lookup with positional postings
-- ✅ **BM25 Ranking** - Industry-standard relevance scoring algorithm
+- ✅ **BM25 Ranking** - Industry-standard relevance scoring algorithm (in progress)
 - ✅ **Custom Data Structures** - Hand-built Map, Trie, and Linked List implementations
 - ✅ **Document Processing** - Efficient tokenization and text parsing
 - ✅ **Term Frequency Tracking** - Accurate word occurrence counting per document
 - ✅ **Interactive Query System** - Command-line interface with /search, /tf, /df, /exit ✨ (New!)
 - ✅ **Query Commands** - Real-time term/document frequency analysis ✨ (New!)
+- ✅ **Working /tf Command** - Get word count in specific documents 🎯 (Dec 31)
 
 ### ⚡ Performance Features
 - 🚀 **Optimized Memory Management** - Manual memory control with no STL overhead
 - 🚀 **Fast Lookups** - O(m) Trie operations for word search
 - 🚀 **Efficient Storage** - Dynamic data structures that scale with content
+- 🚀 **strlen() Optimization** - Called once, not in loops 🎯 (Dec 31)
+- 🚀 **Linear Complexity** - O(n²) → O(n) for TF search 🎯 (Dec 31)
 
 ### 🧠 Advanced Features (Planned)
 - 🔄 Phrase search using token positions
@@ -292,10 +295,14 @@ high-performance-search-engine-cpp/
 - [x] **Command routing with input manager** ✨ (Dec 28)
 - [x] **Memory leak fixes** ✨ (Dec 28)
 - [x] **Robust error handling** ✨ (Dec 28)
+- [x] **Term Frequency (/tf) fully working** 🎯 (Dec 31)
+- [x] **Performance optimizations (strlen)** 🎯 (Dec 31)
+- [x] **Trie-Listnode integration** 🎯 (Dec 31)
 
 ### 🔄 In Progress
-- [ ] BM25 scoring implementation
+- [ ] Document Frequency (/df) implementation
 - [ ] Full /search query processing
+- [ ] BM25 scoring implementation
 - [ ] Result ranking and sorting
 
 ### 📋 Planned Features
