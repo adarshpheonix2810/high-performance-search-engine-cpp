@@ -18,7 +18,8 @@ int tf(char* token, TrieNode* trie){
     }
     
     // Validate document ID is a number
-    for(int i=0; i<strlen(token2); i++){
+    int len = strlen(token2);
+    for(int i=0; i<len; i++){
         if(!isdigit(token2[i])){
             cout<<"Error: Document ID must be a number"<<endl;
             return -1;
@@ -33,6 +34,16 @@ int tf(char* token, TrieNode* trie){
         return -1;
     }
     
-    cout<<"not implemented yet"<<endl;
+    // Search for the word and get frequency
+    int wordlen = strlen(token2);
+    int frequency = trie->tfsearchword(id, token2, 0, wordlen);
+    
+    // Display result with clear message
+    if(frequency == 0){
+        cout<<"Term '"<<token2<<"' not found in document "<<id<<endl;
+    } else {
+        cout<<"Term '"<<token2<<"' appears "<<frequency<<" time(s) in document "<<id<<endl;
+    }
+    
     return 0;
 }
