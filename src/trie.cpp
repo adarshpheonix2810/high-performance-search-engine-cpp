@@ -6,14 +6,14 @@ using namespace std;
 
 TrieNode::TrieNode():value(-1), sibling(nullptr), child(nullptr)
 {
-    //list = nullptr;
+    list = nullptr;
 };
 
 TrieNode::~TrieNode()
 {
-    // if(list!=nullptr){
-    //     delete list;
-    // }
+    if(list!=nullptr){
+        delete list;
+    }
     if(sibling!=nullptr){
         delete sibling;
     }
@@ -26,8 +26,9 @@ void TrieNode::insert(char* token, int id){
     if(value ==-1 || value ==token[0]){
         value = token[0];
         if(strlen(token)==1){
-            //initialise list
-            return;
+            if(list==nullptr)
+                list=new listnode(id);
+            list->add(id);
         }
         else{
             if(child == nullptr){
@@ -43,4 +44,29 @@ void TrieNode::insert(char* token, int id){
         sibling->insert(token,id);
     }
     return ;
+}
+int TrieNode::tfsearchword(int id, char* word, int curr, int wordlen){
+    if(word[curr]==value){
+        if(curr==wordlen-1){
+            if(list!=NULL){
+                return list->search(id);
+            }else{
+                return 0;
+            }
+        }
+        else{
+            if(child!=NULL){
+                return child->tfsearchword(id, word, curr+1, wordlen);
+            }else{
+                return 0;
+            }
+        }
+    }
+    else{
+        if(sibling!=NULL){
+            return sibling->tfsearchword(id, word, curr, wordlen);
+        }else{
+            return 0;
+        }
+    }
 }
