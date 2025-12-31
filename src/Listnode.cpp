@@ -17,3 +17,14 @@ void listnode::add(int did)
     }
     
 }
+int listnode::search(int did)
+{
+    if(did==id)
+        return times;
+    else
+    {
+        if(next==NULL)
+            return 0;
+        return next->search(did);
+    }
+}
