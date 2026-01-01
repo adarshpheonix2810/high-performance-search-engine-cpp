@@ -28,3 +28,10 @@ int listnode::search(int did)
         return next->search(did);
     }
 }
+int listnode::volume()
+{
+    if(next != NULL) 
+        return 1 + next->volume();
+    else 
+        return 1;
+}
