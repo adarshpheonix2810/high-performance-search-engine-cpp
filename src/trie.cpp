@@ -95,3 +95,17 @@ int TrieNode::tfsearchword(int id, char* word, int curr, int wordlen){
         }
     }
 }
+void TrieNode::searchall(char* buffer, int curr){
+    buffer [ curr ] = value;
+    if(list!=NULL){
+        cout<<buffer<<" : "<<list->volume()<<endl;
+
+    }
+    if(child!=NULL){
+        child->searchall(buffer, curr+1);
+    }
+    if(sibling!=NULL){
+        sibling->searchall(buffer, curr);
+    }
+    buffer [ curr ] = '\0';
+}
