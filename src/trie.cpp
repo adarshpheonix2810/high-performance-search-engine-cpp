@@ -45,6 +45,31 @@ void TrieNode::insert(char* token, int id){
     }
     return ;
 }
+int TrieNode::dfsearchword(char* word, int curr, int wordlen){
+    if(word[curr]==value){
+        if(curr==wordlen-1){
+            if(list!=NULL){
+                return list->volume();
+            }
+            else{
+                return 0;
+            }
+        }else{
+            if(child!=NULL){
+                return child->dfsearchword(word, curr+1, wordlen);
+            }else{
+                return 0;
+            }
+        }
+    }
+    else{
+        if(sibling!=NULL){
+            return sibling->dfsearchword(word, curr, wordlen);
+        }else{
+            return 0;
+        }
+    }
+};
 int TrieNode::tfsearchword(int id, char* word, int curr, int wordlen){
     if(word[curr]==value){
         if(curr==wordlen-1){
