@@ -46,6 +46,8 @@ Understanding how search engines work is fundamental to backend engineering. Thi
 - ✅ **Interactive Query System** - Command-line interface with /search, /tf, /df, /exit ✨ (New!)
 - ✅ **Query Commands** - Real-time term/document frequency analysis ✨ (New!)
 - ✅ **Working /tf Command** - Get word count in specific documents 🎯 (Dec 31)
+- ✅ **Working /df Command** - Count documents containing words 🎉 (Jan 1)
+- ✅ **Vocabulary Display** - View all indexed words with /df 🚀 (Jan 2)
 
 ### ⚡ Performance Features
 - 🚀 **Optimized Memory Management** - Manual memory control with no STL overhead
@@ -300,10 +302,12 @@ high-performance-search-engine-cpp/
 - [x] **Term Frequency (/tf) fully working** 🎯 (Dec 31)
 - [x] **Performance optimizations (strlen)** 🎯 (Dec 31)
 - [x] **Trie-Listnode integration** 🎯 (Dec 31)
+- [x] **Document Frequency (/df) fully working** 🎉 (Jan 1)
+- [x] **volume() function for DF counting** 🎉 (Jan 1)
+- [x] **searchall() - Display all indexed words** 🚀 (Jan 2)
 
 ### 🔄 In Progress
-- [ ] Document Frequency (/df) implementation
-- [ ] Full /search query processing
+- [ ] Full /search query processing with ranking
 - [ ] BM25 scoring implementation
 - [ ] Result ranking and sorting
 
