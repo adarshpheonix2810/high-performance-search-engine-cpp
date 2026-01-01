@@ -86,6 +86,8 @@ Understanding how search engines work is fundamental to backend engineering. Thi
    ```bash
    mkdir build
    cd build
+   cmake .. -G "MinGW Makefiles"
+   or
    cmake -G "MinGW Makefiles" ..
    cmake --build .
    ```
