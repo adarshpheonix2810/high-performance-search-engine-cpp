@@ -95,6 +95,8 @@ int TrieNode::tfsearchword(int id, char* word, int curr, int wordlen){
         }
     }
 }
+/*
+// Disabled: searchall() causes memory corruption
 void TrieNode::searchall(char* buffer, int curr){
     buffer [ curr ] = value;
     if(list!=NULL){
@@ -109,3 +111,35 @@ void TrieNode::searchall(char* buffer, int curr){
     }
     buffer [ curr ] = '\0';
 }
+*/
+void TrieNode::search(char* word, int curr, Scorelist* scorelist){
+    static int wordlen = strlen(word);
+    if(curr == 0) wordlen = strlen(word);  // Reset on first call
+    
+    if(word[curr]==value){
+        if(curr==wordlen-1){
+            if(list!=NULL){
+                list->passdocuments(scorelist);
+                return;
+            }
+            else{ 
+                return;
+            }
+        }
+        else{
+            if(child!=NULL){
+                child->search(word, curr+1, scorelist);
+                return;
+            }
+            else{
+                return;
+            }
+        }
+    }
+    else{
+        if(sibling!=NULL){
+            sibling->search(word, curr, scorelist);
+        }
+    }
+}
+
