@@ -1,9 +1,77 @@
 #include "Search.hpp"
 using namespace std;
+const float k1=1.2;
+const float b=0.75;
+const int MAX_QUERY_WORDS = 10;  // Maximum search terms in one query
+const int MAX_WORDS_STORAGE = 100;  // Storage array size
+const int MAX_WORD_LENGTH = 256;  // Maximum length per word
 
 void search(char *token, TrieNode *trie, Mymap *map, int k)
 {
-    cout << "not implemented yet" << endl;
+    char queryWords[MAX_WORDS_STORAGE][MAX_WORD_LENGTH];
+    double IDF[MAX_WORDS_STORAGE];
+    
+    token = strtok(NULL, " \t\n");
+    if(token == NULL){
+        cout << "Error: Please enter search terms" << endl;
+        return;
+    }
+    
+    Scorelist* scorelist = new Scorelist();
+    int i;
+    for(i=0; i<MAX_QUERY_WORDS; i++){
+        if(token == NULL){
+            break;
+        }
+        strcpy(queryWords[i], token);
+        int wordlen = strlen(queryWords[i]);
+        IDF[i]=log10(((double)map->get_size()-(double)trie->dfsearchword(queryWords[i],0,wordlen)+0.5)/((double)trie->dfsearchword(queryWords[i],0,wordlen)+0.5));
+        trie->search(queryWords[i],0,scorelist);
+        token = strtok(NULL, " \t\n");
+    }
+    double avgdl=0;
+    for(int m=0; m<map->get_size(); m++){
+        avgdl+=(double)map->getlength(m);
+    }
+    avgdl/=(double)map->get_size();
+    double score=0;
+    Scorelist* currentDoc=scorelist;
+    //maxheap
+    int resultCount = 0;
+    Maxheap* heap=new Maxheap(k);
+    while(currentDoc!=NULL){
+        if(currentDoc->get_id() != -1){  // Skip empty placeholder node
+            for(int l=0;l<i;l++){
+                int wordlen = strlen(queryWords[l]);
+                double tf = (double)trie->tfsearchword(currentDoc->get_id(),queryWords[l],0,wordlen);
+                score+=IDF[l]*(tf*(k1+1.0))/(tf+k1*(1.0-b+b*((double)map->getlength(currentDoc->get_id())/(double)avgdl)));
+            }
+            heap->insert(score, currentDoc->get_id());
+            score=0;
+            resultCount++;
+        }
+        currentDoc=currentDoc->get_next();
+    }
+    if(resultCount>k){
+        resultCount=k;
+    }
+    
+    // Display top k results from heap
+    int actualResults = heap->get_count();
+    if(actualResults == 0){
+        cout << "No documents found matching the query." << endl;
+    } else {
+        cout << "Top " << actualResults << " results:" << endl;
+        cout << "----------------------------------------" << endl;
+        for(int j = 0; j < actualResults; j++){
+            int docId = heap->get_id();
+            cout << "Document " << docId << endl;
+            heap->remove();
+        }
+    }
+    
+    delete heap;
+    delete scorelist;
 }
 
 void df(TrieNode *trie)
@@ -24,10 +92,9 @@ void df(TrieNode *trie)
             cout << "Term '" << token2 << "' appears in " << docCount << " document(s)" << endl;
         }
     }
-    else{
-        char* buffer = (char*)malloc(256*sizeof(char));
-        trie->searchall(buffer,0);
-        free(buffer);
+    else
+    {
+        cout << "Error: Missing word. Usage: /df <word>" << endl;
     }
 }
 
