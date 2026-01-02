@@ -473,35 +473,503 @@ Error: Document ID must be a number
 
 ---
 
+## 9. What is #include <windows.h>?
+
+### Definition
+
+**`#include <windows.h>`** is a **Windows-specific header file** that provides access to Windows API functions, including terminal/console manipulation functions.
+
+### What Does It Provide?
+
+```cpp
+#include <windows.h>
+```
+
+**Windows API functions available:**
+- `GetConsoleScreenBufferInfo()` - Get terminal dimensions
+- `CONSOLE_SCREEN_BUFFER_INFO` - Structure for console data
+- `GetStdHandle(STD_OUTPUT_HANDLE)` - Get console handle
+- `SetConsoleTextAttribute()` - Change text colors
+- `system("cls")` - Clear screen
+
+### Why Do We Use It?
+
+**In Search.hpp:**
+```cpp
+#ifdef _WIN32
+    #include <windows.h>
+#else
+    #include <sys/ioctl.h>
+    #include <unistd.h>
+#endif
+```
+
+**Purpose:** Get terminal width for formatted output (line separators, etc.)
+
+**Windows Example:**
+```cpp
+CONSOLE_SCREEN_BUFFER_INFO csbi;
+GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+int width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+```
+
+**Linux Alternative:**
+```cpp
+struct winsize w;
+ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+int width = w.ws_col;
+```
+
+### Cross-Platform Approach
+
+**Our Implementation:**
+```cpp
+#ifdef _WIN32       // Windows
+    #include <windows.h>
+#else               // Linux/Unix/Mac
+    #include <sys/ioctl.h>
+    #include <unistd.h>
+#endif
+```
+
+**Explanation:**
+- `#ifdef _WIN32` - Checks if compiling on Windows
+- Include Windows headers if Windows
+- Include POSIX headers if Unix-like systems
+- Allows same code to compile on different platforms
+
+### Q: What Are Alternatives to windows.h?
+
+**1. Hardcode Width**
+```cpp
+int width = 80;  // Assume 80 columns
+```
+✅ Simple, works everywhere
+❌ Not accurate for all terminals
+❌ Users with different screen sizes see bad formatting
+
+**2. Use Cross-Platform Library**
+```cpp
+#include <ncurses.h>  // Terminal manipulation library
+initscr();
+int width = COLS;
+```
+✅ Works on all platforms
+❌ Requires external library installation
+❌ More complex API
+
+**3. Use Boost.Program_options**
+```cpp
+#include <boost/program_options.hpp>
+```
+✅ Professional-grade
+❌ Heavy dependency
+❌ Overkill for simple terminal width
+
+**4. Conditional Compilation (Our Choice)**
+```cpp
+#ifdef _WIN32
+    // Windows code
+#else
+    // Linux code
+#endif
+```
+✅ No external dependencies
+✅ Native platform functions (fastest)
+✅ Minimal code
+❌ Must maintain two code paths
+
+### Q: Why Not Always Include windows.h?
+
+**Problem with always including:**
+```cpp
+#include <windows.h>  // On Linux: ERROR!
+```
+
+**Error on Linux:**
+```
+fatal error: windows.h: No such file or directory
+```
+
+**Reason:** 
+- `windows.h` only exists on Windows
+- Linux uses different system headers
+- Must use conditional compilation
+
+---
+
+## 10. What is BM25 Ranking Algorithm?
+
+### Definition
+
+**BM25 (Best Matching 25)** is a probabilistic ranking function used to score documents based on query term relevance.
+
+### Full Name
+
+**Okapi BM25** - Developed at City University, London (Okapi information retrieval system)
+
+### Why Use BM25?
+
+**Problem with simple word counting:**
+```
+Query: "machine learning"
+Doc 1: "machine" appears 5 times → Score = 5
+Doc 2: "machine" appears 100 times → Score = 100
+```
+
+❌ **Issue:** Doc 2 might just be repeating "machine" without real content!
+
+**BM25 Solution:**
+- **Diminishing returns** - Each occurrence matters less
+- **Document length normalization** - Penalize long documents
+- **IDF weighting** - Rare words score higher
+
+### BM25 Formula
+
+```
+score = Σ IDF(qi) × (f(qi,D) × (k1+1)) / (f(qi,D) + k1×(1 - b + b×(|D|/avgdl)))
+
+Where:
+  qi      = query term i
+  IDF     = Inverse Document Frequency
+  f(qi,D) = Term frequency in document D (TF)
+  |D|     = Document length (word count)
+  avgdl   = Average document length
+  k1      = Term frequency saturation (typically 1.2)
+  b       = Length normalization (typically 0.75)
+```
+
+### Components Explained
+
+**1. IDF (Inverse Document Frequency)**
+```cpp
+IDF = log((N - df + 0.5) / (df + 0.5))
+
+Where:
+  N  = Total number of documents
+  df = Documents containing the term
+```
+
+**Example:**
+```
+Total docs: 100
+Term "the": appears in 95 docs → IDF = log((100-95+0.5)/(95+0.5)) = -2.94 (low)
+Term "quantum": appears in 2 docs → IDF = log((100-2+0.5)/(2+0.5)) = 3.68 (high)
+```
+
+**Interpretation:**
+- Common words ("the", "is") → Low IDF → Less important
+- Rare words ("quantum", "algorithm") → High IDF → More important
+
+**2. Term Frequency Saturation (k1)**
+```cpp
+k1 = 1.2  // Standard value
+
+tf_component = (tf × (k1+1)) / (tf + k1×normalization)
+```
+
+**Example with k1=1.2:**
+```
+TF=1  → tf_component ≈ 0.92
+TF=2  → tf_component ≈ 1.47
+TF=5  → tf_component ≈ 1.96
+TF=10 → tf_component ≈ 2.04
+TF=100→ tf_component ≈ 2.18  (barely increases!)
+```
+
+**Effect:** After ~10 occurrences, additional occurrences barely increase score.
+
+**3. Length Normalization (b)**
+```cpp
+b = 0.75  // Standard value (0 = no normalization, 1 = full)
+
+normalization = 1 - b + b×(docLength/avgLength)
+```
+
+**Example with b=0.75:**
+```
+Doc length = avg length → norm = 1.0 (no penalty)
+Doc length = 2× avg    → norm = 1.75 (score reduced)
+Doc length = 0.5× avg  → norm = 0.625 (score boosted)
+```
+
+**Effect:** Longer documents need higher TF to match short documents.
+
+### Complete BM25 Example
+
+```
+Query: "search engine"
+Total docs: 10
+Average doc length: 100 words
+
+Term "search":
+  - Appears in 5 docs → IDF = log((10-5+0.5)/(5+0.5)) = 0.0
+  
+Term "engine":
+  - Appears in 2 docs → IDF = log((10-2+0.5)/(2+0.5)) = 1.22
+
+Document 5:
+  - Length: 120 words
+  - TF("search") = 3
+  - TF("engine") = 2
+  
+Score calculation:
+  normalization = 1 - 0.75 + 0.75×(120/100) = 1.15
+  
+  score("search") = 0.0 × (3×2.2)/(3 + 1.2×1.15) = 0.0
+  score("engine") = 1.22 × (2×2.2)/(2 + 1.2×1.15) = 1.27
+  
+  Total BM25 score = 0.0 + 1.27 = 1.27
+```
+
+### Q: Why k1=1.2 and b=0.75?
+
+**Answer:** Empirically determined optimal values.
+
+**Research findings:**
+- Tested on TREC (Text REtrieval Conference) datasets
+- k1=1.2 and b=0.75 performed best across various document collections
+- Values can be tuned for specific domains
+
+**Parameter effects:**
+```
+k1 higher (2.0):  More weight on term frequency
+k1 lower (0.5):   Less weight on term frequency
+
+b higher (1.0):   Full length normalization
+b lower (0.0):    No length normalization
+```
+
+### Q: What Are Alternatives to BM25?
+
+**1. TF-IDF (Term Frequency - Inverse Document Frequency)**
+```cpp
+score = TF × IDF
+```
+✅ Simpler formula
+✅ Faster computation
+❌ No length normalization
+❌ Linear TF scaling (no saturation)
+
+**2. BM25+ (Extended BM25)**
+```cpp
+score = BM25 + delta×(|D|/avgdl)
+```
+✅ Better for verbose queries
+✅ Prevents zero scores
+❌ More complex
+❌ Extra parameter (delta)
+
+**3. Language Models**
+```cpp
+score = P(query|document)
+```
+✅ Theoretically elegant
+✅ Handles phrase queries better
+❌ More computational overhead
+❌ Requires smoothing techniques
+
+**4. Neural Ranking (BERT, etc.)**
+```cpp
+score = NeuralNetwork(query, document)
+```
+✅ State-of-the-art accuracy
+✅ Understands semantics
+❌ Extremely slow
+❌ Requires GPU
+❌ Needs training data
+
+**Our choice:** BM25 is the **industry standard** for fast, effective text search.
+
+---
+
+## 11. Memory Management in Search Function
+
+### Q: Why Do We Need delete heap and delete scorelist?
+
+**Problem: Memory Leaks**
+```cpp
+void search(...) {
+    Maxheap* heap = new Maxheap(k);      // Allocates memory
+    Scorelist* scorelist = new Scorelist();  // Allocates memory
+    
+    // ... use heap and scorelist ...
+    
+    return;  // ❌ Memory never freed! LEAK!
+}
+```
+
+**Each search call leaks:**
+- Heap object: ~100 bytes + (k × 12 bytes for scores)
+- Scorelist chain: ~16 bytes × number of documents
+
+**After 1000 searches:** Megabytes of leaked memory!
+
+**Solution (Jan 2, 2026 Fix):**
+```cpp
+void search(...) {
+    Maxheap* heap = new Maxheap(k);
+    Scorelist* scorelist = new Scorelist();
+    
+    // ... use them ...
+    
+    // Cleanup before returning
+    delete heap;       // Frees heap arrays
+    delete scorelist;  // Frees entire chain recursively
+}
+```
+
+### Q: Why Not Use Stack Allocation?
+
+**Alternative approach:**
+```cpp
+void search(...) {
+    Maxheap heap(k);        // Stack allocation
+    Scorelist scorelist;    // Stack allocation
+    
+    // ... use them ...
+    
+    // Automatic cleanup when function exits
+}
+```
+
+**Advantages:**
+✅ No manual delete needed
+✅ Automatic cleanup
+✅ Exception-safe
+
+**Why we don't use it:**
+❌ Maxheap uses malloc internally (expects heap allocation)
+❌ Stack size limited (~1MB) - large k might overflow
+❌ C-style codebase convention (new/delete)
+
+**Modern C++ would prefer stack allocation!**
+
+---
+
+## 12. Input Validation
+
+### Q: Why Check if(token == NULL)?
+
+**Added: January 2, 2026**
+
+```cpp
+void search(char* token, ...) {
+    if(token == NULL) {
+        cout << "Error: No search query provided" << endl;
+        return;
+    }
+    // ... rest of function ...
+}
+```
+
+**Problem without validation:**
+```
+User types: /search
+             ↓
+token = NULL (strtok returns NULL for empty input)
+             ↓
+strtok(NULL, " ")  // Undefined behavior!
+             ↓
+CRASH or garbage results
+```
+
+**With validation:**
+```
+User types: /search
+             ↓
+token = NULL
+             ↓
+Check: token == NULL? YES
+             ↓
+Display error message
+Return safely ✅
+```
+
+### Q: What Other Validation Could We Add?
+
+**1. Maximum query length**
+```cpp
+int wordCount = 0;
+while(token != NULL && wordCount < MAX_QUERY_WORDS) {
+    // Prevents overflow if user pastes huge query
+}
+```
+
+**2. Empty word validation**
+```cpp
+if(strlen(token) == 0) continue;  // Skip empty tokens
+```
+
+**3. Special character handling**
+```cpp
+// Remove punctuation, convert to lowercase
+for(int i=0; token[i]; i++){
+    if(!isalnum(token[i])) token[i] = ' ';
+    token[i] = tolower(token[i]);
+}
+```
+
+**4. Result count validation**
+```cpp
+if(k <= 0 || k > 100) {
+    cout << "Error: k must be between 1 and 100" << endl;
+    return;
+}
+```
+
+**Currently implemented:** Basic NULL check (sufficient for controlled input).
+
+---
+
 ## Summary
 
 ### Key Concepts
 
 1. **TF** - Word count in specific document (relevance indicator)
 2. **DF** - Document count containing word (rarity indicator)
-3. **strtok** - String tokenizer (NEVER free its result!)
-4. **isdigit** - Validates numeric input (prevents atoi errors)
-5. **atoi** - Converts string to int (simple, no error reporting)
-6. **stoi** - Modern C++ alternative (exceptions, slower for C-style code)
+3. **BM25** - Probabilistic ranking with TF saturation and length normalization
+4. **strtok** - String tokenizer (NEVER free its result!)
+5. **isdigit** - Validates numeric input (prevents atoi errors)
+6. **atoi** - Converts string to int (simple, no error reporting)
+7. **stoi** - Modern C++ alternative (exceptions, slower for C-style code)
+8. **windows.h** - Windows API for terminal functions (cross-platform with ifdef)
 
 ### Why These Choices?
 
 ✅ **strtok** - Fast, simple, fits C-style design  
 ✅ **isdigit** - Validates before conversion  
 ✅ **atoi** - Simple conversion after validation  
-✅ **Command system** - User-friendly query interface  
+✅ **BM25** - Industry standard ranking algorithm  
+✅ **windows.h** - Native terminal access (conditional compilation)  
+✅ **delete heap/scorelist** - Prevents memory leaks  
+✅ **Input validation** - Prevents crashes on empty queries  
+
+### BM25 Parameters
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| **k1** | 1.2 | TF saturation (diminishing returns) |
+| **b** | 0.75 | Length normalization factor |
+| **IDF** | log((N-df+0.5)/(df+0.5)) | Rare word boosting |
 
 ### Integration with Other Modules
 
 ```
-User Query → Search.cpp → Trie → Listnode → TF/DF values
+User Query → Search.cpp → Parse → Trie (TF/DF lookup)
                       ↓
-                   Map → Document content
+              Calculate BM25 → Scorelist (track docs)
+                      ↓
+              Insert to Maxheap → Get top-k results
+                      ↓
+              Display documents → Map (get content)
+                      ↓
+              Cleanup (delete heap, scorelist)
 ```
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 28, 2025  
-**Changes**: Initial creation with search concepts and command system  
+**Document Version**: 1.1  
+**Last Updated**: January 2, 2026  
+**Changes**: Added BM25 explanation, windows.h Q&A, memory management, input validation  
 **Author**: High-Performance Search Engine Project
