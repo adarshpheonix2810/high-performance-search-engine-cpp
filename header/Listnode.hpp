@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdlib>
+#include "Score.hpp"
 #include <cstring>
 #ifndef LISTNODE_HPP
 #define LISTNODE_HPP
@@ -9,10 +10,11 @@ class listnode
     int id;         //document id
     int times;      //how many times to the specific doc
     public:
-        listnode(int did):id(did),times(0){next=NULL;}
+        listnode(int docId):id(docId),times(1){next=NULL;}
         ~listnode();
-        void add(int did);
-        int search(int did);
+        void add(int docId);
+        int search(int docId);
         int volume();
+        int passdocuments(Scorelist* scorelist);
 };
 #endif
