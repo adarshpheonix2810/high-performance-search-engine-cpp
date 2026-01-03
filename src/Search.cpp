@@ -25,29 +25,55 @@ void search(char *token, TrieNode *trie, Mymap *map, int k)
         }
         strcpy(queryWords[i], token);
         int wordlen = strlen(queryWords[i]);
-        IDF[i]=log10(((double)map->get_size()-(double)trie->dfsearchword(queryWords[i],0,wordlen)+0.5)/((double)trie->dfsearchword(queryWords[i],0,wordlen)+0.5));
+        double df = (double)trie->dfsearchword(queryWords[i],0,wordlen);
+        double N = (double)map->get_size();
+        // IDF formula: log((N - df + 0.5) / (df + 0.5))
+        // Add safety check to prevent log of negative or zero
+        if(df == 0){
+            IDF[i] = log((N + 1.0) / 1.0);  // Word not found, maximum IDF
+        } else {
+            IDF[i] = log((N - df + 0.5) / (df + 0.5));
+        }
         trie->search(queryWords[i],0,scorelist);
         token = strtok(NULL, " \t\n");
+    }
+    
+    // Check if any words were parsed
+    if(i == 0){
+        cout << "Error: Please enter valid search terms" << endl;
+        delete scorelist;
+        return;
     }
     double avgdl=0;
     for(int m=0; m<map->get_size(); m++){
         avgdl+=(double)map->getlength(m);
     }
-    avgdl/=(double)map->get_size();
+    if(map->get_size() > 0){
+        avgdl/=(double)map->get_size();
+    }
+    if(avgdl == 0){
+        avgdl = 1.0;  // Prevent division by zero
+    }
+    
     double score=0;
     Scorelist* currentDoc=scorelist;
     //maxheap
     int resultCount = 0;
     Maxheap* heap=new Maxheap(k);
+
     while(currentDoc!=NULL){
         if(currentDoc->get_id() != -1){  // Skip empty placeholder node
+            score = 0;
             for(int l=0;l<i;l++){
                 int wordlen = strlen(queryWords[l]);
                 double tf = (double)trie->tfsearchword(currentDoc->get_id(),queryWords[l],0,wordlen);
-                score+=IDF[l]*(tf*(k1+1.0))/(tf+k1*(1.0-b+b*((double)map->getlength(currentDoc->get_id())/(double)avgdl)));
+                if(tf > 0){  // Only calculate if term exists in document
+                    double doclen = (double)map->getlength(currentDoc->get_id());
+                    double bm25_tf = (tf * (k1 + 1.0)) / (tf + k1 * (1.0 - b + b * (doclen / avgdl)));
+                    score += IDF[l] * bm25_tf;
+                }
             }
             heap->insert(score, currentDoc->get_id());
-            score=0;
             resultCount++;
         }
         currentDoc=currentDoc->get_next();
@@ -61,12 +87,55 @@ void search(char *token, TrieNode *trie, Mymap *map, int k)
     if(actualResults == 0){
         cout << "No documents found matching the query." << endl;
     } else {
-        cout << "Top " << actualResults << " results:" << endl;
-        cout << "----------------------------------------" << endl;
         for(int j = 0; j < actualResults; j++){
+            if(heap->get_count() == 0){
+                break;  // No more results in heap
+            }
+            
             int docId = heap->get_id();
-            cout << "Document " << docId << endl;
+            if(docId == -1 || docId >= map->get_size()){
+                heap->remove();
+                continue;  // Skip invalid document
+            }
+            
+            double docScore = heap->get_score();
             heap->remove();
+            
+            // Get document content
+            const char *fullDoc = map->getDocument(docId);
+            if(fullDoc == NULL){
+                continue;  // Skip if document not found
+            }
+            
+            // Print header: [docId] Document Title score=X.XXXXXX
+            cout << "[" << docId << "] ";
+            
+            // Extract first line as title
+            char *line = (char*)malloc(map->get_buffersize()*sizeof(char));
+            if(line == NULL){
+                cout << " score=" << docScore << endl;
+                cout << fullDoc << endl;
+                if(j < actualResults - 1){
+                    cout << "---" << endl;
+                }
+                continue;
+            }
+            
+            strcpy(line, fullDoc);
+            char *firstLine = strtok(line, "\n");
+            if(firstLine != NULL){
+                cout << firstLine;
+            }
+            cout << " score=" << docScore << endl;
+            free(line);
+            
+            // Print the full document content
+            cout << fullDoc << endl;
+            
+            // Print separator
+            if(j < actualResults - 1){
+                cout << "---" << endl;
+            }
         }
     }
     
@@ -119,6 +188,12 @@ int tf(char *token, TrieNode *trie)
         }
     }
     int id = atoi(token2);
+    
+    // Validate document ID is non-negative
+    if(id < 0){
+        cout << "Error: Document ID must be non-negative" << endl;
+        return -1;
+    }
 
     // Get the word to search
     token2 = strtok(NULL, " \t\n");
