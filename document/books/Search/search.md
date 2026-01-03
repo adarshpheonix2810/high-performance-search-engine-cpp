@@ -973,3 +973,370 @@ User Query → Search.cpp → Parse → Trie (TF/DF lookup)
 **Last Updated**: January 2, 2026  
 **Changes**: Added BM25 explanation, windows.h Q&A, memory management, input validation  
 **Author**: High-Performance Search Engine Project
+
+---
+
+## 9. January 3, 2026 - Additional Concepts
+
+### Q: What is log() vs log10()?
+
+**Answer**: They are different logarithm functions with different bases.
+
+**log()** - Natural logarithm (base e ≈ 2.71828)
+```cpp
+#include <cmath>
+double x = log(10);    // ln(10) = 2.302585
+double y = log(2.718); // ln(e) ≈ 1.0
+```
+
+**log10()** - Common logarithm (base 10)
+```cpp
+#include <cmath>
+double x = log10(100);   // log₁₀(100) = 2.0
+double y = log10(1000);  // log₁₀(1000) = 3.0
+```
+
+**Which to use for BM25?**
+
+Standard BM25 uses **natural logarithm (log)**, not log10. The formula is:
+```
+IDF = log((N - df + 0.5) / (df + 0.5))
+```
+
+**Why?**
+- Natural logarithm is standard in information retrieval literature
+- Gives better score ranges for ranking
+- More mathematically consistent with probability theory
+
+**Our Bug (Fixed Jan 3)**: Initially used `log10()` which produced wrong IDF scores. Changed to `log()` for correct BM25 implementation.
+
+---
+
+### Q: What causes "nan" (Not a Number) in floating-point?
+
+**Answer**: NaN occurs when performing invalid mathematical operations.
+
+**Common causes**:
+
+1. **Division by zero in floating-point**:
+```cpp
+double x = 0.0 / 0.0;  // nan
+```
+
+2. **Square root of negative**:
+```cpp
+double x = sqrt(-1.0);  // nan
+```
+
+3. **Logarithm of zero or negative**:
+```cpp
+double x = log(0.0);   // nan
+double y = log(-5.0);  // nan
+```
+
+4. **Infinity operations**:
+```cpp
+double inf = 1.0 / 0.0;  // infinity
+double x = inf - inf;     // nan
+```
+
+**Our Bug (Fixed Jan 3)**:
+
+When all documents contain a word, `df = N`, so:
+```cpp
+IDF = log((N - N + 0.5) / (N + 0.5))
+    = log(0.5 / (N + 0.5))
+    = negative number (when N > 0)
+```
+
+Then in BM25 calculation with negative IDF, we could get division issues causing NaN.
+
+**Solution**: Check if `df == 0` and use special case IDF formula.
+
+---
+
+### Q: What is const char* vs char*?
+
+**Answer**: The `const` keyword makes the pointer point to read-only data.
+
+**char*** - Mutable string pointer
+```cpp
+char* str = "hello";
+str[0] = 'H';  // ✅ Allowed (modifies data)
+str = "world"; // ✅ Allowed (changes pointer)
+```
+
+**const char*** - Immutable string pointer
+```cpp
+const char* str = "hello";
+str[0] = 'H';  // ❌ Compile error! Cannot modify
+str = "world"; // ✅ Allowed (changes pointer)
+```
+
+**When to use const char***:
+
+1. Function returns string that shouldn't be modified:
+```cpp
+const char* getDocument(int id){
+    return docs[id];  // Don't let caller modify internal data
+}
+```
+
+2. Function parameter that won't modify string:
+```cpp
+void print(const char* str){
+    cout << str;  // Only reading, not modifying
+}
+```
+
+**Our case (Fixed Jan 3)**:
+```cpp
+const char *fullDoc = map->getDocument(docId);
+// getDocument() returns const char* because internal document
+// data shouldn't be modified by caller
+```
+
+**Benefits**:
+- **Safety**: Prevents accidental modification
+- **Clarity**: Shows intent (read-only access)
+- **Compiler optimization**: Can optimize better with const
+
+---
+
+### Q: What is malloc() failure and how to handle it?
+
+**Answer**: `malloc()` returns NULL if memory allocation fails (out of memory).
+
+**Checking malloc()**:
+```cpp
+char* buffer = (char*)malloc(1000 * sizeof(char));
+if(buffer == NULL){
+    // Handle error - malloc failed!
+    cout << "Out of memory!" << endl;
+    return -1;  // or other error handling
+}
+
+// Use buffer...
+strcpy(buffer, "data");
+
+free(buffer);  // Always free when done
+```
+
+**Why malloc() can fail**:
+1. System out of memory (RAM full)
+2. Requesting too much memory at once
+3. Memory fragmentation
+4. Process memory limit reached
+
+**Our handling (Added Jan 3)**:
+```cpp
+char *line = (char*)malloc(map->get_buffersize()*sizeof(char));
+if(line == NULL){
+    // Graceful fallback - print without title extraction
+    cout << " score=" << docScore << endl;
+    cout << fullDoc << endl;
+    continue;
+}
+// Normal path - extract title
+strcpy(line, fullDoc);
+// ...
+free(line);
+```
+
+**Good practices**:
+- Always check malloc() result before using
+- Have fallback behavior for failure
+- Free memory when done (prevent leaks)
+
+---
+
+### Q: What is "terminate called recursively" error?
+
+**Answer**: This error occurs when an exception is thrown during exception handling cleanup, causing recursive termination.
+
+**Common causes**:
+
+1. **Destructor throws exception**:
+```cpp
+class Bad{
+    ~Bad(){
+        throw std::exception();  // ❌ Never throw in destructor!
+    }
+};
+
+Bad b;  // When b goes out of scope, exception during cleanup
+        // → "terminate called recursively"
+```
+
+2. **Memory corruption**:
+```cpp
+char* ptr = new char[10];
+delete ptr;
+delete ptr;  // ❌ Double free! Memory corruption
+             // → Can cause recursive termination
+```
+
+3. **Stack overflow in recursive destructor**:
+```cpp
+class Node{
+    Node* next;
+    ~Node(){ delete next; }  // Recursive deletion
+};
+// Long chain → stack overflow → recursive termination
+```
+
+**Our bug (Fixed Jan 3)**: Memory corruption from reusing buffer after `strtok()`:
+```cpp
+// BUGGY CODE
+strcpy(line, map->getDocument(docId));
+strtok(line, "\n");      // Modifies 'line' buffer
+strcpy(line, ...);       // ❌ Corrupts memory!
+                         // → terminate called recursively
+```
+
+**Solution**: Don't reuse corrupted buffers, use fresh pointers.
+
+---
+
+### Q: Why check bounds before array access?
+
+**Answer**: Accessing array out of bounds causes undefined behavior (crashes, corruption).
+
+**Example of bounds checking**:
+```cpp
+int arr[10];
+
+// ❌ BAD - No bounds check
+int value = arr[15];  // Out of bounds! Crash or garbage
+
+// ✅ GOOD - With bounds check
+int index = 15;
+if(index >= 0 && index < 10){
+    int value = arr[index];  // Safe
+} else {
+    cout << "Index out of range!" << endl;
+}
+```
+
+**Our cases (Fixed Jan 3)**:
+
+1. **Document ID validation**:
+```cpp
+int docId = heap->get_id();
+if(docId == -1 || docId >= map->get_size()){
+    // Out of bounds, skip this document
+    continue;
+}
+```
+
+2. **Heap index validation**:
+```cpp
+while(index > 0 && heap[index] > heap[(index-1)/2]){
+    // Check index > 0 before accessing parent at (index-1)/2
+}
+```
+
+**Why it matters**:
+- **Prevents crashes**: No segmentation faults
+- **Data integrity**: Don't read/write garbage memory
+- **Security**: Prevents buffer overflow exploits
+- **Debugging**: Clear error messages instead of mysterious crashes
+
+---
+
+### Q: What is short-circuit evaluation?
+
+**Answer**: Logical operators (&&, ||) stop evaluating once result is determined.
+
+**&& (AND) operator**:
+```cpp
+if(condition1 && condition2){
+    // Both must be true
+}
+```
+- If `condition1` is false, `condition2` is NOT evaluated
+- Evaluates left-to-right, stops at first false
+
+**|| (OR) operator**:
+```cpp
+if(condition1 || condition2){
+    // At least one must be true
+}
+```
+- If `condition1` is true, `condition2` is NOT evaluated
+- Evaluates left-to-right, stops at first true
+
+**Why useful for safety**:
+```cpp
+// ✅ SAFE - Short-circuit prevents invalid access
+if(index > 0 && heap[index] > heap[(index-1)/2]){
+    // If index=0, first condition is false
+    // Second condition (heap access) is NOT evaluated
+    // No invalid access to heap[-1]!
+}
+
+// ❌ UNSAFE - Without short-circuit
+if(heap[index] > heap[(index-1)/2] && index > 0){
+    // Always evaluates heap access first
+    // If index=0, accesses heap[-1] → CRASH!
+}
+```
+
+**Our usage (Added Jan 3)**:
+```cpp
+while(index > 0 && heap[index]>heap[(index-1)/2]){
+    // Order matters! Check index > 0 FIRST
+    // If false, heap access never happens
+}
+```
+
+**Performance benefit**: Skips unnecessary evaluations, faster code.
+
+---
+
+### Q: What is integer division behavior with negative numbers?
+
+**Answer**: Integer division truncates toward zero, which can give unexpected results.
+
+**Positive division**:
+```cpp
+int x = 7 / 2;   // = 3 (not 3.5)
+int y = 9 / 3;   // = 3
+```
+
+**Negative division**:
+```cpp
+int x = -1 / 2;  // = 0 (truncates toward zero)
+int y = -7 / 2;  // = -3 (not -3.5 or -4)
+```
+
+**Our concern (Fixed Jan 3)**:
+
+When `index = 0`, computing parent:
+```cpp
+int parent = (index - 1) / 2;
+            = (0 - 1) / 2
+            = -1 / 2
+            = 0  (in most compilers)
+```
+
+Result is 0, but this is **relying on undefined/implementation-defined behavior**!
+
+**Better approach**:
+```cpp
+// ✅ Explicit check instead of relying on integer division
+while(index > 0 && heap[index] > heap[(index-1)/2]){
+    // Never executes when index=0
+    // Clear, portable, safe
+}
+```
+
+**Lesson**: Don't rely on integer division behavior with negative numbers. Use explicit bounds checks.
+
+---
+
+**Document Version**: 1.2  
+**Last Updated**: January 3, 2026  
+**New Concepts**: log vs log10, NaN causes, const char*, malloc failure, terminate recursively, bounds checking, short-circuit evaluation, integer division with negatives  
+**Purpose**: Small explanations for concepts used in January 3 fixes  
+**Author**: High-Performance Search Engine Project
