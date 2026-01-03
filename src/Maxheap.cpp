@@ -14,8 +14,8 @@ Maxheap::Maxheap(int k):
     }
 }
 int Maxheap::minindex(int low,int high){
-    int min=1;
-    double minscore=1000000.0;
+    int min=low;
+    double minscore=heap[low];
     for(int i=low;i<high;i++){
         if(heap[i]<minscore){
             min=i;
@@ -51,7 +51,7 @@ void Maxheap::insert(double score,int id){
     }
     heap[index]=score;
     ids[index]=id;
-    while(heap[index]>heap[(index-1)/2]){
+    while(index > 0 && heap[index]>heap[(index-1)/2]){
         swapscore(index,(index-1)/2);
         index=(index-1)/2;
     }
